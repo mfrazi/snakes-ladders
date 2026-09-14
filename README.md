@@ -319,65 +319,92 @@ raw HTML would otherwise find an empty `<body>`. What's there for it:
   keyword block, which is worth less than nothing.
 - **`robots.txt`** and a one-entry **`sitemap.xml`**.
 
-The canonical origin appears in five places that must agree: the `canonical`
-link, `og:url`, the Open Graph/Twitter image URLs, the JSON-LD `url`, and
-`sitemap.xml` (plus the `Sitemap:` line in `robots.txt`). If the site moves to
-a custom domain, change all of them — a canonical tag pointing at a different
-origin tells crawlers to index that one instead.
+Those absolute URLs are **not** hardcoded to a domain. They carry a
+placeholder origin that `worker.js` rewrites to the real request origin — see
+"What the Worker does" below. A canonical tag naming an origin that no longer
+serves the page tells crawlers to index that other origin instead, which is
+worse than having no canonical at all, so the URL is derived rather than
+remembered.
 
-Note that the Cloudflare project is still named `snake-ladder-love-edition`,
-which is what fixes the `.pages.dev` URL. Renaming it creates a *new* project
-at a new URL and leaves the old one serving the old build, so it's deliberately
-left alone despite the title change.
-
-Check the tags render as intended before announcing anything:
+You can see the rewrite working locally:
 
 ```bash
-npx wrangler pages deploy . && open "https://cards-dev.twitter.com/validator"
+npm run dev
+curl -s http://localhost:8787/ | grep canonical
+curl -s http://localhost:8787/sitemap.xml | grep loc
 ```
+
+Both should echo back `localhost:8787`, not the placeholder.
 
 ## Deploying to Cloudflare
 
-The whole game is static — plain HTML/CSS/JS, no build step, no server-side
-code. (The AI feature calls Claude/OpenAI/Gemini directly from the browser,
-same as it does locally — there's nothing to run server-side either way.)
-That means it deploys as-is to either Cloudflare product; pick whichever you
-prefer.
+**Cloudflare Workers is the only deploy target.** Workers serves both the HTML
+and every static file; there is no Pages config. One command, no build step:
 
 ```bash
 npm install
 npx wrangler login
-```
-
-**Option A — Cloudflare Pages** (simplest; `wrangler.toml` is already set up
-for this):
-
-```bash
-npm run deploy:pages
-```
-
-Live at `https://snake-ladder-love-edition.pages.dev` (or connect this repo in
-the Cloudflare dashboard for git-based deploys — build command: none, output
-directory: `/`).
-
-**Option B — Cloudflare Workers** (static assets, via `wrangler.workers.jsonc`
-— useful if you later want to add Worker logic alongside the game, e.g. a
-server-side LLM proxy):
-
-```bash
-npm run deploy:workers
+npm run deploy
 ```
 
 Live at `https://snake-ladder-love-edition.<your-subdomain>.workers.dev`.
 
-Both read `.assetsignore` (same syntax as `.gitignore`) to skip everything
-that isn't part of the deployed site — `serve.py`, the `wrangler*` configs
-themselves, `package.json`, docs, `.claude/`. Only `index.html`, `style.css`,
-`script.js`, `data.js`, `manifest.json`, `sw.js`, `robots.txt`, `sitemap.xml`,
-`assets/`, and `icons/` actually ship. I confirmed this with a real `wrangler deploy --dry-run`, not
-just by eyeballing the ignore list — it caught a real gap (Wrangler's own
-`.wrangler/` cache folder wasn't excluded yet) before this was written down
-as done.
+To run the real Workers runtime locally — the asset server, the Worker and
+`.assetsignore` all behaving as they will in production — use:
+
+```bash
+npm run dev
+```
+
+That needs no Cloudflare login. (`npm start` is still the plain `serve.py`
+static server, which is lighter for ordinary UI work but does *not* exercise
+the Worker.)
+
+### What the Worker does
+
+Almost nothing, by design. `wrangler.jsonc` routes only four paths through
+`worker.js` — `/`, `/index.html`, `/robots.txt`, `/sitemap.xml` — via
+`run_worker_first`. Everything else (CSS, JS, textures, icons) is served
+straight from Cloudflare's asset storage and never invokes the Worker at all,
+so the common case costs nothing.
+
+Its one job is the absolute URLs in the SEO metadata. Those have to name the
+site's own origin, and they have to be absolute — but a workers.dev address
+contains the account's own subdomain, which isn't knowable from the repo, and
+the site may later move to a custom domain. So the files carry a placeholder
+origin and the Worker swaps it for the real request origin on the way out.
+That keeps the canonical tag, `og:url`, both image URLs, the JSON-LD `url`,
+the sitemap `<loc>` and the `Sitemap:` line correct on workers.dev, on a
+custom domain, and on preview deployments, with nothing to remember to update.
+
+The rewrite is a literal string match, so if you change the placeholder,
+change it in all four places: `index.html`, `robots.txt`, `sitemap.xml`, and
+`PLACEHOLDER_ORIGIN` in `worker.js`.
+
+### What actually ships
+
+`.assetsignore` (same syntax as `.gitignore`) skips everything that isn't part
+of the deployed site — `serve.py`, `wrangler.jsonc`, `package.json`, docs,
+`LICENSE`, `.claude/`, and `worker.js` itself, which Wrangler loads at build
+time and which would otherwise *also* be uploaded and served at `/worker.js`.
+
+Don't trust the file count Wrangler prints. `wrangler deploy --dry-run` says
+it "Read 158 files" here, which is more files than exist in the repo — that
+number is a pre-filter scan, not the upload set. The only reliable check is to
+ask the running server:
+
+```bash
+npm run dev
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8787/serve.py   # 404
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8787/style.css  # 200
+```
+
+`/index.html` returns a **307 to `/`**. That is Cloudflare's default
+`html_handling` canonicalising the URL, and it's wanted — it keeps one
+indexable URL instead of two. But it is why `sw.js` precaches `'./'` and never
+`'./index.html'`: `cache.addAll()` is unreliable for requests that redirect,
+and one bad entry rejects the whole call, which would silently disable offline
+support.
 
 **On the caching bug from earlier in this project:** the reason `serve.py`
 exists is that Python's plain `http.server` sends no `Cache-Control` header,
