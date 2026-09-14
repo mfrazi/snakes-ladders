@@ -5,8 +5,8 @@
   "description": "A Snake & Ladder game for couples or friends where every square starts a conversation — plain HTML/CSS/JS, deployable as a static site.",
   "scripts": {
     "start": "python3 serve.py",
-    "deploy:pages": "wrangler pages deploy .",
-    "deploy:workers": "wrangler deploy --config wrangler.workers.jsonc"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "latest"

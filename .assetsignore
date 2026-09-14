@@ -1,14 +1,17 @@
 # Dev-only files — excluded from what actually gets uploaded to Cloudflare.
-# Same gitignore-style syntax, honored by both `wrangler pages deploy` and
-# `wrangler deploy` (Workers static assets); the deployed site only needs
-# index.html, style.css, script.js, data.js, manifest.json, sw.js,
+# Same gitignore-style syntax, honored by `wrangler deploy`; the deployed site
+# only needs index.html, style.css, script.js, data.js, manifest.json, sw.js,
 # robots.txt, sitemap.xml, assets/, and icons/.
 #
 # robots.txt and sitemap.xml must NOT be added here — they only do their job
 # if crawlers can fetch them from the deployed origin.
+#
+# worker.js must be here: it is the Worker's own source, loaded by Wrangler at
+# build time. Without this line it would ALSO be uploaded as a static asset and
+# served at /worker.js.
+worker.js
+wrangler.jsonc
 serve.py
-wrangler.toml
-wrangler.workers.jsonc
 package.json
 package-lock.json
 node_modules
@@ -17,4 +20,5 @@ node_modules
 .git
 .gitignore
 .assetsignore
+LICENSE
 *.md

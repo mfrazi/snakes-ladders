@@ -1,0 +1,25 @@
+// Cloudflare Workers — the only deploy target for this site. Workers serves
+// both the HTML and every static file; there is no Pages config any more.
+//
+//   npm run deploy     -> wrangler deploy
+//   npm run dev        -> wrangler dev (local, no login needed)
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "snake-ladder-love-edition",
+  "compatibility_date": "2026-09-13",
+
+  // A tiny Worker sits in front of three files to correct their absolute SEO
+  // URLs — see the comment at the top of worker.js.
+  "main": "worker.js",
+
+  "assets": {
+    // The repo root already IS the site; there is no build step.
+    "directory": ".",
+    "binding": "ASSETS",
+
+    // Only these paths invoke the Worker. Everything else — CSS, JS, textures,
+    // icons — is served directly from Cloudflare's asset storage, so the common
+    // case costs no Worker invocation at all.
+    "run_worker_first": ["/", "/index.html", "/robots.txt", "/sitemap.xml"]
+  }
+}

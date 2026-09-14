@@ -2,11 +2,15 @@
 // that invalidates the old cache. Kept in sync by eye with the BUILD const
 // in script.js (they can't share a value directly: this file runs in a
 // separate worker context script.js never loads into).
-const CACHE_NAME = 'snake-ladder-v3';
+const CACHE_NAME = 'snake-ladder-v4';
 
+// NOTE: './' only — do not add './index.html'. Cloudflare canonicalises
+// /index.html to / with a 307, and cache.addAll() is unreliable for requests
+// that redirect: the whole call can reject, which would take precaching (and
+// therefore all offline support) down with it. './' is the canonical URL and
+// serves the same document.
 const CORE_ASSETS = [
   './',
-  './index.html',
   './style.css',
   './script.js',
   './data.js',
@@ -59,6 +63,8 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         return response;
       })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match('./index.html')))
+      // Falls back to './' rather than './index.html' — that is the URL the
+      // document is actually cached under (see CORE_ASSETS above).
+      .catch(() => caches.match(request).then((cached) => cached || caches.match('./')))
   );
 });
