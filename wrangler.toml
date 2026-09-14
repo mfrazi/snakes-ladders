@@ -1,0 +1,13 @@
+# Cloudflare Pages config — the primary deploy path for this static site.
+# Deploy with: npx wrangler pages deploy .
+# (or `npm run deploy:pages` — see package.json)
+#
+# For the Cloudflare Workers (static assets) alternative instead, see
+# wrangler.workers.jsonc and the "Deploying to Cloudflare" section in
+# README.md — that path uses `wrangler deploy`, not this file.
+
+name = "snake-ladder-love-edition"
+compatibility_date = "2026-09-13"
+
+# No build step — the repo root already IS the deployable site.
+pages_build_output_dir = "."

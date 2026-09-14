@@ -1,0 +1,20 @@
+{
+  "name": "Snake & Ladder: Love & Friends Edition",
+  "short_name": "Snake & Ladder",
+  "description": "A Snake & Ladder game for couples or friends, where every square you land on starts a conversation — 190+ questions, dares and surprises.",
+  "categories": ["games", "entertainment", "social"],
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fdeef1",
+  "theme_color": "#d6336c",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

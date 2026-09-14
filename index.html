@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+<!--
+  SEO. The canonical origin appears here, in the Open Graph/Twitter URLs, in
+  the JSON-LD below, and in sitemap.xml + robots.txt. If the site moves to a
+  custom domain, those are the five places to change — and they must all agree,
+  or the canonical tag will point crawlers away from the page they are on.
+-->
+<title>Snake &amp; Ladder: Love &amp; Friends Edition — Conversation Game</title>
+<meta
+  name="description"
+  content="Play Snake &amp; Ladder with a twist: every square starts a real conversation. 190+ questions and dares for couples or friends. Free, no sign-up, works offline."
+/>
+<link rel="canonical" href="https://snake-ladder-love-edition.pages.dev/" />
+<meta name="robots" content="index, follow, max-image-preview:large" />
+
+<!-- Open Graph (Facebook, WhatsApp, LinkedIn, iMessage) -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Snake &amp; Ladder: Love &amp; Friends Edition" />
+<meta property="og:title" content="Snake &amp; Ladder: Love &amp; Friends Edition" />
+<meta
+  property="og:description"
+  content="Every square you land on starts a real conversation. 190+ questions, dares and surprises for couples or friends. Free, no sign-up, works offline."
+/>
+<meta property="og:url" content="https://snake-ladder-love-edition.pages.dev/" />
+<meta property="og:image" content="https://snake-ladder-love-edition.pages.dev/assets/og-cover.jpg" />
+<meta property="og:image:type" content="image/jpeg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta
+  property="og:image:alt"
+  content="A pink Snake and Ladder board with a gold heart-runged ladder, a friendly snake, two game pawns, and small hearts floating above it."
+/>
+<meta property="og:locale" content="en_US" />
+
+<!-- Twitter/X -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Snake &amp; Ladder: Love &amp; Friends Edition" />
+<meta
+  name="twitter:description"
+  content="Every square you land on starts a real conversation. 190+ questions, dares and surprises for couples or friends."
+/>
+<meta name="twitter:image" content="https://snake-ladder-love-edition.pages.dev/assets/og-cover.jpg" />
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d6336c" id="theme-color-meta" />
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png" />
+<link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Snake &amp; Ladder" />
+
+<!-- Structured data. Search engines read this, not the JS-built UI. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Snake & Ladder: Love & Friends Edition",
+  "url": "https://snake-ladder-love-edition.pages.dev/",
+  "description": "A two-to-six player Snake & Ladder board game where every square you land on starts a conversation. Choose Couples mode or Friends mode for questions, dares and surprises written for who is playing. Runs in the browser, installs as an app, and works offline.",
+  "applicationCategory": "GameApplication",
+  "operatingSystem": "Any (web browser)",
+  "browserRequirements": "Requires JavaScript.",
+  "inLanguage": "en",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "image": "https://snake-ladder-love-edition.pages.dev/assets/og-cover.jpg",
+  "screenshot": "https://snake-ladder-love-edition.pages.dev/assets/og-cover.jpg",
+  "featureList": [
+    "Couples mode and Friends mode with different questions and dares",
+    "190+ conversation questions across 12 topics",
+    "25 surprise cards",
+    "2 to 6 players on one device",
+    "Six randomly generated board scenes",
+    "Optional AI-written questions using your own API key",
+    "Downloadable transcript of every question and answer",
+    "Installs as an app and works offline"
+  ]
+}
+</script>
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!--
+  Icon sprite. Line icons at currentColor rather than emoji: emoji render at the
+  mercy of the platform's font, can't take the accent colour, and read as
+  placeholder art next to real UI. Stroke/​fill come from CSS (.icon) — both are
+  inherited properties, so they reach the <use> shadow tree.
+-->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-sound-on" viewBox="0 0 24 24">
+    <path d="M11 5 6 9H3v6h3l5 4z" />
+    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+    <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+  </symbol>
+  <symbol id="i-sound-off" viewBox="0 0 24 24">
+    <path d="M11 5 6 9H3v6h3l5 4z" />
+    <path d="m16 9 5 6M21 9l-5 6" />
+  </symbol>
+  <symbol id="i-history" viewBox="0 0 24 24">
+    <path d="M3 12a9 9 0 1 0 2.6-6.4" />
+    <path d="M3 4v4h4" />
+    <path d="M12 7.5V12l3 2" />
+  </symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24">
+    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+    <path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" />
+  </symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24">
+    <path d="M21 12a9 9 0 1 1-2.6-6.4" />
+    <path d="M21 4v5h-5" />
+  </symbol>
+  <symbol id="i-download" viewBox="0 0 24 24">
+    <path d="M12 3v11" />
+    <path d="m7.5 10.5 4.5 4.5 4.5-4.5" />
+    <path d="M4 20h16" />
+  </symbol>
+  <symbol id="i-close" viewBox="0 0 24 24">
+    <path d="M6 6l12 12M18 6 6 18" />
+  </symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24">
+    <path d="M17 4l3 3-3 3" />
+    <path d="M17 14l3 3-3 3" />
+    <path d="M4 7h4l8 10h4" />
+    <path d="M4 17h4l2.2-2.8" />
+    <path d="M14 9.2 16 7h4" />
+  </symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24">
+    <path d="M12 5v14M5 12h14" />
+  </symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24">
+    <path
+      d="M12 20.4 4.6 13a4.6 4.6 0 0 1 6.5-6.5l.9.9.9-.9A4.6 4.6 0 0 1 19.4 13z"
+      fill="currentColor"
+      stroke="none"
+    />
+  </symbol>
+  <symbol id="i-dice" viewBox="0 0 24 24">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="4.5" />
+    <circle cx="8.5" cy="8.5" r="1.4" fill="currentColor" stroke="none" />
+    <circle cx="15.5" cy="15.5" r="1.4" fill="currentColor" stroke="none" />
+    <circle cx="15.5" cy="8.5" r="1.4" fill="currentColor" stroke="none" />
+    <circle cx="8.5" cy="15.5" r="1.4" fill="currentColor" stroke="none" />
+  </symbol>
+</svg>
+
+<!--
+  The interface is built by script.js, so a crawler (or anyone with JS off)
+  would otherwise find an empty page. This is the real description of the game,
+  visible to both — not hidden keyword text, which is worth less than nothing.
+-->
+<noscript>
+  <div class="noscript">
+    <h1>Snake &amp; Ladder: Love &amp; Friends Edition</h1>
+    <p>
+      A Snake &amp; Ladder board game for two to six players sharing one device,
+      where every square you land on starts a conversation. Land on a question
+      tile and you are asked something worth answering; land on a surprise and
+      you might swap places, skip a turn, or owe someone a compliment.
+    </p>
+    <p>
+      Pick <strong>Couples mode</strong> for questions and dares written for two
+      partners, or <strong>Friends mode</strong> for a version with nothing
+      romantic in it. There are more than 190 questions across twelve topics —
+      Love, Money, Dreams, Deep Talk, Memories, Home &amp; Family, Growth,
+      Gratitude, Adventure, Everyday, General and Fun &amp; Dare — plus 25
+      surprise cards, six randomly generated board scenes, and an optional mode
+      that writes fresh questions with your own AI API key.
+    </p>
+    <p>
+      It is free, needs no sign-up, keeps everything in your own browser, and
+      can be installed as an app that works offline.
+    </p>
+    <p><strong>This game needs JavaScript. Please turn it on to play.</strong></p>
+  </div>
+</noscript>
+
+<!-- Animated scene texture, sits behind everything -->
+<div id="scene-photo" class="scene-photo"></div>
+<div id="scene-texture" class="scene-texture"></div>
+
+<!-- SETUP -->
+<section id="setup-screen" class="screen">
+  <div class="setup-card">
+    <header class="setup-head">
+      <h1>Snake &amp; Ladder</h1>
+      <p class="setup-sub">A board game about the people you're playing with.</p>
+    </header>
+
+    <section class="field">
+      <div class="field-head">
+        <h2 class="field-label">Playing as</h2>
+      </div>
+      <div class="segmented" id="mode-choice"></div>
+      <p class="field-note" id="mode-hint"></p>
+    </section>
+
+    <section class="field">
+      <div class="field-head">
+        <h2 class="field-label">Players</h2>
+        <span class="field-hint">Tap a face or dot to change</span>
+      </div>
+      <div id="player-list" class="player-list"></div>
+      <button type="button" id="add-player-btn" class="add-btn">
+        <svg class="icon icon-sm"><use href="#i-plus" /></svg>
+        Add player
+      </button>
+    </section>
+
+    <section class="field">
+      <div class="field-head">
+        <h2 class="field-label">Topics</h2>
+        <button type="button" id="theme-toggle-all" class="link-btn">Clear all</button>
+      </div>
+      <div class="theme-chips" id="theme-chips"></div>
+    </section>
+
+    <div class="setup-foot">
+      <button type="button" id="start-btn" class="primary-btn block-btn">Start game</button>
+      <div class="setup-meta">
+        <span id="scene-label" class="scene-label"></span>
+        <button type="button" id="setup-ai-btn" class="link-btn">
+          <svg class="icon icon-sm"><use href="#i-sparkle" /></svg>
+          AI questions
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- GAME -->
+<section id="game-screen" class="screen hidden">
+  <header class="game-header">
+    <div class="scores" id="scores"></div>
+    <div class="header-tools">
+      <button type="button" id="sound-btn" class="icon-btn" title="Sound" aria-label="Sound">
+        <svg class="icon"><use id="sound-icon" href="#i-sound-on" /></svg>
+      </button>
+      <button type="button" id="log-btn" class="icon-btn" title="History" aria-label="History">
+        <svg class="icon"><use href="#i-history" /></svg>
+      </button>
+      <button type="button" id="ai-btn" class="icon-btn" title="AI questions" aria-label="AI questions">
+        <svg class="icon"><use href="#i-sparkle" /></svg>
+      </button>
+      <button type="button" id="new-game-btn" class="icon-btn" title="New game" aria-label="New game">
+        <svg class="icon"><use href="#i-restart" /></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="board-wrap">
+    <div id="board" class="board"></div>
+  </div>
+
+  <div class="dock">
+    <div id="turn-banner" class="turn-banner"></div>
+    <button type="button" id="roll-btn" class="primary-btn roll-btn">
+      <svg class="icon"><use href="#i-dice" /></svg>
+      Roll
+    </button>
+  </div>
+</section>
+
+<!-- FULLSCREEN DICE -->
+<div id="dice-overlay" class="dice-overlay hidden">
+  <div class="dice-stage" id="dice-stage">
+    <div class="dice-lift">
+      <div class="dice" id="dice"></div>
+    </div>
+    <div class="dice-shadow"></div>
+  </div>
+  <p class="dice-hint">Tap to skip</p>
+</div>
+
+<!-- QUESTION -->
+<div id="question-modal" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <div id="question-theme-badge" class="theme-badge"></div>
+    <p id="question-text" class="modal-question"></p>
+    <textarea id="answer-input" class="answer-input" rows="3" placeholder="Type your answer to keep it (optional)"></textarea>
+    <div class="modal-actions">
+      <button type="button" id="question-answered-btn" class="primary-btn block-btn">Answered</button>
+      <div class="modal-row">
+        <button type="button" id="question-another-btn" class="ghost-btn">
+          <svg class="icon icon-sm"><use href="#i-shuffle" /></svg>
+          Another
+        </button>
+        <button type="button" id="question-skip-btn" class="ghost-btn">Skip</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SURPRISE -->
+<div id="surprise-modal" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <div id="surprise-icon" class="surprise-icon"></div>
+    <p id="surprise-text" class="modal-question"></p>
+    <div class="modal-actions">
+      <button type="button" id="surprise-ok-btn" class="primary-btn block-btn">Got it</button>
+    </div>
+  </div>
+</div>
+
+<!-- WIN -->
+<div id="win-modal" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <div class="surprise-icon">🏆</div>
+    <p id="win-text" class="modal-question"></p>
+    <div id="win-summary" class="win-summary"></div>
+    <div class="modal-actions">
+      <button type="button" id="play-again-btn" class="primary-btn block-btn">Play again</button>
+      <button type="button" id="new-players-btn" class="ghost-btn">New players</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM -->
+<div id="confirm-modal" class="modal-backdrop hidden">
+  <div class="modal-box modal-narrow">
+    <h2 class="modal-title" id="confirm-title">Start a new game?</h2>
+    <p class="modal-sub" id="confirm-body">This game's board and answers will be cleared.</p>
+    <div class="modal-actions">
+      <button type="button" id="confirm-yes-btn" class="primary-btn block-btn">Start over</button>
+      <button type="button" id="confirm-no-btn" class="ghost-btn">Keep playing</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI SETTINGS -->
+<div id="ai-modal" class="modal-backdrop hidden">
+  <div class="modal-box modal-left">
+    <h2 class="modal-title">AI questions</h2>
+    <p class="modal-sub">Questions written live for your game. Your key stays in this browser only.</p>
+
+    <label class="input-label" for="ai-providers">Provider</label>
+    <div class="segmented" id="ai-providers"></div>
+
+    <label class="input-label" for="ai-key">API key</label>
+    <input type="password" id="ai-key" class="answer-input" placeholder="sk-…" autocomplete="off" />
+
+    <label class="input-label" for="ai-model">Model</label>
+    <input type="text" id="ai-model" class="answer-input" placeholder="Model" />
+
+    <div id="ai-test-status" class="ai-status"></div>
+    <div class="modal-actions">
+      <button type="button" id="ai-save-btn" class="primary-btn block-btn">Save &amp; test</button>
+      <div class="modal-row">
+        <button type="button" id="ai-clear-btn" class="ghost-btn">Clear</button>
+        <button type="button" id="ai-close-btn" class="ghost-btn">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY DRAWER -->
+<div id="log-drawer" class="log-drawer hidden">
+  <div class="log-panel">
+    <div class="log-head">
+      <h2 class="modal-title">History</h2>
+      <div class="log-head-actions">
+        <button type="button" id="log-download-btn" class="icon-btn" title="Download questions &amp; answers" aria-label="Download">
+          <svg class="icon"><use href="#i-download" /></svg>
+        </button>
+        <button type="button" id="log-close-btn" class="icon-btn" title="Close" aria-label="Close">
+          <svg class="icon"><use href="#i-close" /></svg>
+        </button>
+      </div>
+    </div>
+    <div id="answer-log"></div>
+    <h2 class="field-label log-section">Moves</h2>
+    <ul id="log-list"></ul>
+  </div>
+</div>
+
+<!-- Win confetti is appended here -->
+<div id="confetti" class="confetti" aria-hidden="true"></div>
+
+<script src="data.js"></script>
+<script src="script.js"></script>
+</body>
+</html>

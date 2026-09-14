@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A single-page game, so this has exactly one entry. It exists because the
+  Sitemap line in robots.txt points at it, and a 404 there is a crawl error
+  rather than a neutral absence.
+
+  The origin must match the canonical tag in index.html.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://snake-ladder-love-edition.pages.dev/</loc>
+    <lastmod>2026-09-14</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

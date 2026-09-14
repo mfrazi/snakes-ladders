@@ -1,0 +1,11 @@
+# Snake & Ladder: Love & Friends Edition
+# Everything here is a static, public game — nothing to keep out of an index.
+
+User-agent: *
+Allow: /
+
+# Dev-only files never reach the deployed site (see .assetsignore), so there is
+# nothing to disallow here. Listing paths that don't exist would only advertise
+# them.
+
+Sitemap: https://snake-ladder-love-edition.pages.dev/sitemap.xml

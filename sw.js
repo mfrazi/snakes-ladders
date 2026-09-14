@@ -1,0 +1,64 @@
+// Bump this on any deploy that changes a cached file — it's the only thing
+// that invalidates the old cache. Kept in sync by eye with the BUILD const
+// in script.js (they can't share a value directly: this file runs in a
+// separate worker context script.js never loads into).
+const CACHE_NAME = 'snake-ladder-v3';
+
+const CORE_ASSETS = [
+  './',
+  './index.html',
+  './style.css',
+  './script.js',
+  './data.js',
+  './manifest.json',
+  './assets/textures/romance.jpg',
+  './assets/textures/forest.jpg',
+  './assets/textures/ocean.jpg',
+  './assets/textures/meadow.jpg',
+  './assets/textures/sunset.jpg',
+  './assets/textures/night.jpg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+});
+
+// Network-first, falling back to cache when offline — deliberately NOT
+// cache-first. This project already spent two rounds fixing a bug where a
+// plain static server let browsers serve a stale script.js forever; a
+// cache-first service worker would reintroduce exactly that class of bug,
+// just one layer deeper. Network-first means an online player always gets
+// the current build, and a cached copy only kicks in with no connection.
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  // Never touch cross-origin requests — the AI feature calls
+  // api.anthropic.com / api.openai.com / generativelanguage.googleapis.com
+  // directly from the page, and those must always hit the real network.
+  if (url.origin !== self.location.origin) return;
+
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        return response;
+      })
+      .catch(() => caches.match(request).then((cached) => cached || caches.match('./index.html')))
+  );
+});
