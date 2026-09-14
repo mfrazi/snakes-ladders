@@ -1949,10 +1949,22 @@
     return provider.extract(await response.json());
   }
 
+  // A hedge against the model chaining two questions onto one line despite
+  // being told not to ("What's your favorite trip? Also, where next?"). This
+  // guarantees only the first one ever reaches the screen, even when the
+  // prompt gets ignored — it's the mechanical backstop, not the primary fix
+  // (that's the wording in buildLiveQuestionPrompt/buildFollowUpPrompt below).
+  // Dare lines have no "?" at all, so they pass through untouched.
+  function firstQuestionOnly(line) {
+    const firstMark = line.indexOf('?');
+    if (firstMark === -1 || firstMark === line.length - 1) return line;
+    return line.slice(0, firstMark + 1);
+  }
+
   function parseQuestions(raw) {
     return raw
       .split('\n')
-      .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+      .map((line) => firstQuestionOnly(line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim()))
       .filter((line) => line.length > 8 && line.length < 220 && line.includes('?'))
       .slice(0, 3);
   }
@@ -1967,7 +1979,7 @@
     const stripQuotes = (s) => s.replace(/^["'“‘]+/, '').replace(/["'”’]+$/, '');
     const lines = raw
       .split('\n')
-      .map((l) => stripQuotes(l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim()).trim())
+      .map((l) => firstQuestionOnly(stripQuotes(l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())).trim())
       .filter((l) => l.length > 8 && l.length < 220);
 
     if (!lines.length) return '';
@@ -2008,8 +2020,8 @@
         : "Write a fresh, standalone prompt for this theme. Don't reference or assume any prior answers.",
       usedBefore ? `Already used for this theme — do not repeat or closely rephrase: ${usedBefore}` : '',
       isDare
-        ? 'This theme is a short playful action for them to do together right now, not a question. Under 20 words.'
-        : 'Write a question. Under 22 words, warm, specific, answerable out loud.',
+        ? 'This theme is a short playful action for them to do together right now, not a question. One action only — never chain two actions with "and" or "then". Under 20 words.'
+        : 'Ask ONE thing, in plain language, under 18 words. Never chain two questions together with "and", "or", a comma, or a second question mark — if you\'re tempted to ask two things, keep only the better one.',
       'Output ONLY that single line. No numbering, no quotes, no preamble, no commentary.',
     ]
       .filter(Boolean)
@@ -2035,8 +2047,10 @@
         transcript,
         '',
         'Write 2 new follow-up questions that build directly on what they said.',
-        'Rules: one question per line. No numbering, no preamble, no commentary.',
-        'Each question must be under 22 words, warm, specific to their answers, and answerable out loud.',
+        'Rules: one question per line, and each line asks ONE thing only — never chain two ' +
+          'questions with "and", "or", a comma, or a second question mark. No numbering, no ' +
+          'preamble, no commentary.',
+        'Each question must be under 18 words, plain language, specific to their answers, and answerable out loud.',
       ])
       .join('\n');
   }
