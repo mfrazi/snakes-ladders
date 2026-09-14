@@ -421,51 +421,5 @@ which is the same "always check, rarely re-download" behavior `serve.py`
 forces locally. So no `_headers` file is needed for this; a normal reload
 after any future deploy is enough.
 
-## Continuous deployment
-
-Every push to `main` — a direct push or a merged PR — deploys automatically
-via `.github/workflows/deploy.yml`. It runs `npx wrangler deploy`, the exact
-same command `npm run deploy` runs locally; nothing CI-specific decides what
-gets shipped.
-
-### One-time setup
-
-The workflow needs two repository secrets (GitHub → **Settings → Secrets and
-variables → Actions → New repository secret**):
-
-- **`CLOUDFLARE_API_TOKEN`** — create one at
-  `dash.cloudflare.com` → **My Profile → API Tokens → Create Token**, using
-  the **Edit Cloudflare Workers** template (or a custom token scoped to
-  `Account > Workers Scripts > Edit` for the account this deploys to). Don't
-  reuse a Global API Key here — it can do far more than this workflow needs.
-- **`CLOUDFLARE_ACCOUNT_ID`** — not actually secret, just simplest to store
-  the same way. Find it on the right sidebar of any page in the Cloudflare
-  dashboard, or run `npx wrangler whoami` locally once logged in.
-
-Until both are set, the workflow fails on every push — a red ✕ in the Actions
-tab, nothing touched. That's expected right up until you add them.
-
-### What it does, in order
-
-1. Checks out the repo and installs the `wrangler` version pinned in
-   `package.json` — pinned deliberately, so an automated pipeline isn't
-   silently riding whatever `wrangler@latest` happens to resolve to on a
-   given day.
-2. Runs `node --check` on `script.js`, `data.js`, and `sw.js`. Cloudflare
-   uploads these as opaque static assets and never parses them, so a syntax
-   error would otherwise ship with no warning until a real browser hit it.
-3. Runs `wrangler deploy`.
-4. **Verifies the live custom domain actually updated.** `wrangler deploy`
-   succeeding only proves *some* Worker got updated — not that it's the one
-   `https://ladder-snake.mfrazi.me` is bound to (see the deploy-identity
-   caveat above: the custom domain doesn't follow a `name` change in
-   `wrangler.jsonc`). So this step pulls the `BUILD` marker straight off the
-   live site and compares it to what this run just pushed, retrying for
-   about 50 seconds to allow for propagation. A mismatch fails the whole run
-   with a pointed error rather than a green checkmark that quietly deployed
-   to a Worker nobody's site points at.
-
-That last step exists because the deploy-identity risk above was real,
-unresolved at the time this workflow was written, and about to become
-invisible the moment deploys stopped being something a person watched
-happen by running the command themselves.
+Deploys are manual — run `npm run deploy` yourself when you want to ship.
+There is no CI workflow watching `main`.
