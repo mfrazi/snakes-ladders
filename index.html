@@ -153,6 +153,11 @@
     <circle cx="15.5" cy="8.5" r="1.4" fill="currentColor" stroke="none" />
     <circle cx="8.5" cy="15.5" r="1.4" fill="currentColor" stroke="none" />
   </symbol>
+  <symbol id="i-github" viewBox="0 0 24 24">
+    <path
+      d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"
+    />
+  </symbol>
 </svg>
 
 <!--
@@ -230,10 +235,22 @@
       <button type="button" id="start-btn" class="primary-btn block-btn">Start game</button>
       <div class="setup-meta">
         <span id="scene-label" class="scene-label"></span>
-        <button type="button" id="setup-ai-btn" class="link-btn">
-          <svg class="icon icon-sm"><use href="#i-sparkle" /></svg>
-          AI questions
-        </button>
+        <div class="setup-links">
+          <a
+            href="https://github.com/mfrazi/ladder-snake"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="link-btn"
+            title="View source on GitHub"
+            aria-label="View source on GitHub"
+          >
+            <svg class="icon icon-sm"><use href="#i-github" /></svg>
+          </a>
+          <button type="button" id="setup-ai-btn" class="link-btn">
+            <svg class="icon icon-sm"><use href="#i-sparkle" /></svg>
+            AI questions
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -256,6 +273,16 @@
       <button type="button" id="new-game-btn" class="icon-btn" title="New game" aria-label="New game">
         <svg class="icon"><use href="#i-restart" /></svg>
       </button>
+      <a
+        href="https://github.com/mfrazi/ladder-snake"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="icon-btn"
+        title="View source on GitHub"
+        aria-label="View source on GitHub"
+      >
+        <svg class="icon"><use href="#i-github" /></svg>
+      </a>
     </div>
   </header>
 

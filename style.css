@@ -444,6 +444,14 @@ button {
   margin-top: 12px;
 }
 
+/* Groups the repo link with "AI questions" so both sit in .setup-meta's
+   right-hand slot without breaking its two-column space-between layout. */
+.setup-links {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .scene-label {
   font-size: 11.5px;
   color: var(--ink-faint);

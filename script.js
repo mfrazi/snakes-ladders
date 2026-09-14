@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-14e';
+  const BUILD = '2026-09-15';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -1571,16 +1571,22 @@
     setQuestionButtonsDisabled(true);
 
     try {
+      const currentName = state.players[state.current].name;
       const canPersonalize = writtenAnswers().length > 0;
       const wantPersonalized = canPersonalize && Math.random() < AI_PERSONALIZE_CHANCE;
 
-      // A background follow-up (queued after a previous typed answer) is
-      // only spent when this turn already rolled "personalised" — otherwise
-      // it's left queued for a later turn instead of being forced out the
-      // moment it's ready. That delay is what makes a callback feel like
-      // "sometimes later" rather than "always next".
-      if (wantPersonalized && state.aiQuestions.length > 0) {
-        const queued = state.aiQuestions.shift();
+      // A background follow-up is reserved for the player it was actually
+      // written for (see requestFollowUps) — normally whoever gave the
+      // original answer, or whoever they named instead. It only fires on
+      // THAT player's own turn, however many turns that takes, rather than
+      // being handed to whoever happens to land on a question tile next.
+      // (`target == null` covers a queue item saved before this existed —
+      // those have no owner recorded, so any player can claim one.)
+      const queuedIndex = state.aiQuestions.findIndex(
+        (q) => q.target == null || q.target === currentName
+      );
+      if (wantPersonalized && queuedIndex !== -1) {
+        const [queued] = state.aiQuestions.splice(queuedIndex, 1);
         applyQuestion(queued.question, queued.theme, true);
         saveState();
         return;
@@ -1591,7 +1597,7 @@
       if (aiReady()) {
         showQuestionLoading(themeKey);
         try {
-          const raw = await callLLM(buildLiveQuestionPrompt(themeKey, wantPersonalized));
+          const raw = await callLLM(buildLiveQuestionPrompt(themeKey, wantPersonalized, currentName));
           const line = parseSingleLine(raw);
           if (line) {
             applyQuestion(line, themeKey, true);
@@ -1988,18 +1994,44 @@
 
   const writtenAnswers = () => state.answers.filter((entry) => entry.answer);
 
+  // Whole-word, case-insensitive: does this text name this player? Used to
+  // decide whether a follow-up stays with whoever answered, or crosses over
+  // to whoever they actually brought up. Regex-escaped since a name is free
+  // text a player typed in on setup, not a pattern.
+  function mentionsPlayer(text, name) {
+    const trimmed = (name || '').trim();
+    if (!text || !trimmed) return false;
+
+    // \b only recognises ASCII word characters, so it can't anchor a name
+    // that starts or ends with anything else — an emoji, most punctuation.
+    // Tested and confirmed: that doesn't throw, it just silently fails to
+    // match at all, which a try/catch around the regex would never catch.
+    // Those names fall back to a plain substring check instead.
+    const edgeSafe = /^[\w'-]/.test(trimmed) && /[\w'-]$/.test(trimmed);
+    if (edgeSafe) {
+      const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+    }
+    return text.toLowerCase().includes(trimmed.toLowerCase());
+  }
+
   // One fresh line for a single theme, generated live for this turn.
   // `personalize` false (the common case) means a clean theme-only prompt
   // with no reference to prior answers, for real variety. `personalize` true
-  // weaves in 1-2 RANDOMLY sampled answers from anywhere in the game so far —
-  // not just the latest — so a callback can land on something said a while
-  // ago, not only the most recent exchange. Told what's already been used
-  // for this theme so it doesn't repeat.
-  function buildLiveQuestionPrompt(themeKey, personalize) {
+  // weaves in 1-2 sampled answers — but the pool stays with `forName`: their
+  // OWN past answers, plus anything anyone else said that actually named
+  // them. That's what keeps a callback about someone from landing on a
+  // player it has nothing to do with; it only crosses over when the earlier
+  // answer itself brought that player up. Told what's already been used for
+  // this theme so it doesn't repeat.
+  function buildLiveQuestionPrompt(themeKey, personalize, forName) {
     const mode = MODES[activeMode()] || MODES.couples;
     const isDare = themeKey === 'dare';
 
-    const sample = personalize ? shuffle(writtenAnswers().slice()).slice(0, 2) : [];
+    const pool = personalize
+      ? writtenAnswers().filter((e) => e.player === forName || mentionsPlayer(e.answer, forName))
+      : [];
+    const sample = shuffle(pool.slice()).slice(0, 2);
     const context = sample
       .map((e) => `${e.player} was asked "${e.question}" and answered: "${e.answer}"`)
       .join('\n');
@@ -2070,19 +2102,31 @@
       const questions = parseQuestions(raw);
       if (questions.length) {
         const written = writtenAnswers();
-        const theme = written[written.length - 1].theme;
-        // Prepended, not appended — so the very next question tile anyone
-        // lands on uses this fresh, on-topic follow-up, not whatever was
-        // already queued from an earlier exchange.
+        const last = written[written.length - 1];
+        const theme = last.theme;
+
+        // Stays with whoever just answered by default — the question
+        // thread continues with the same person rather than jumping to
+        // whoever's turn happens to come up next. Unless their own answer
+        // named someone else at the table, in which case that's who the
+        // follow-up is actually about, and who it's held for instead.
+        const mentioned = state.players.find(
+          (p) => p.name !== last.player && mentionsPlayer(last.answer, p.name)
+        );
+        const target = mentioned ? mentioned.name : last.player;
+
+        // Prepended, not appended — so the very next question tile the
+        // target player lands on uses this fresh, on-topic follow-up, not
+        // whatever was already queued from an earlier exchange.
         state.aiQuestions = [
-          ...questions.map((question) => ({ question, theme })),
+          ...questions.map((question) => ({ question, theme, target })),
           ...state.aiQuestions,
         ];
         // Kept modest — the queue is no longer drained every turn (see
         // drawQuestion), so a large cap would let stale, recency-biased
         // items linger indefinitely.
         if (state.aiQuestions.length > 6) state.aiQuestions.length = 6;
-        logMessage(`✨ ${questions.length} personal question${questions.length > 1 ? 's' : ''} ready`);
+        logMessage(`✨ ${questions.length} personal question${questions.length > 1 ? 's' : ''} ready for ${target}`);
         saveState();
       }
     } catch (error) {

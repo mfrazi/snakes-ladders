@@ -229,11 +229,25 @@ the model, every turn** — not the fixed 192-question bank.
 Most of those are fresh, theme-only prompts with no reference to anything
 you've said — variety, not one long follow-up chain. About a third of the
 time (`AI_PERSONALIZE_CHANCE` in `script.js`) it weaves in something you
-actually answered instead, and when it does, it samples randomly from
-**everything you've said all game**, not just the last answer — so a callback
-can land on something from several turns ago, not only what just happened.
-It's also told what's already been used for that theme so it doesn't repeat
-itself.
+actually answered instead, sampled from anywhere in the game so far, not just
+the last answer — so a callback can land on something from several turns
+ago, not only what just happened. It's also told what's already been used for
+that theme so it doesn't repeat itself.
+
+That personalization stays with the same person: it only draws on **your own**
+past answers, unless someone else's answer actually named you — say your
+partner's, or a friend's — in which case that's fair game too. It never
+reaches for a random stranger's answer that has nothing to do with you.
+
+The same rule decides who a background follow-up goes to. After you type an
+answer, the model is asked for two on-topic follow-ups, and those stay
+reserved for **you specifically** — held until your own next turn, however
+many turns that takes, rather than being handed to whoever else happens to
+land on a question tile first. The one exception: if your answer named
+someone else at the table, the follow-up is about them now, so it's held for
+*their* turn instead. Either way, it's still down to chance whether that
+turn actually uses it, or draws something fresh instead — reserved isn't the
+same as guaranteed.
 
 Open **AI questions**, pick **Claude**, **OpenAI**, or **Gemini**, paste your
 own API key, and hit **Save & test**. From then on, landing on a question tile
@@ -247,8 +261,8 @@ back to the static question bank instead of stalling the game, and the reason
 is written to the 📜 history log (e.g. "✨ AI unavailable, used a saved question
 instead (529: …)") so you can see what happened without it interrupting play.
 A background pre-fetch still runs after a typed answer too: if it's already
-delivered a follow-up by the time the next tile is hit, that one is used
-instantly with no wait, since it's already paid for.
+delivered a follow-up by the time its target's next tile is hit, that one is
+used instantly with no wait, since it's already paid for.
 
 Notes:
 
