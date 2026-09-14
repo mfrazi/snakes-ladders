@@ -4,13 +4,13 @@
   Sitemap line in robots.txt points at it, and a 404 there is a crawl error
   rather than a neutral absence.
 
-  The origin is a placeholder that worker.js rewrites to the real host on the
-  way out — it must match PLACEHOLDER_ORIGIN there and the canonical tag in
-  index.html, since the rewrite is a literal string match.
+  The origin is hardcoded to the real, live domain — matching robots.txt and
+  the canonical tag in index.html. If the site ever moves domains, update all
+  three together.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://snake-ladder-love-edition.workers.dev/</loc>
+    <loc>https://ladder-snake.mfrazi.me/</loc>
     <lastmod>2026-09-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>

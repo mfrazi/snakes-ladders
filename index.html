@@ -5,21 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
 <!--
-  SEO. The origin below is a PLACEHOLDER. On the deployed site, worker.js
-  rewrites it to whatever host is actually serving the page, so these tags stay
-  correct on workers.dev, on a custom domain, and on preview deployments with
-  nothing to update by hand. Served any other way (e.g. serve.py locally) the
-  placeholder shows through, which is harmless — nothing crawls localhost.
-
-  If you change it here, change it in robots.txt, sitemap.xml, and
-  PLACEHOLDER_ORIGIN in worker.js too: the rewrite is a literal string match.
+  SEO. The origin below is hardcoded to the real, live domain — matching
+  robots.txt and sitemap.xml. It used to be a placeholder that a Worker
+  rewrote at request time (useful while the eventual domain was still
+  unknown), but with the domain now fixed, hardcoding it directly is simpler
+  and needs no Worker invocation on every request. If the site ever moves
+  domains, update it here, in robots.txt, and in sitemap.xml together.
 -->
 <title>Snake &amp; Ladder: Love &amp; Friends Edition — Conversation Game</title>
 <meta
   name="description"
   content="Play Snake &amp; Ladder with a twist: every square starts a real conversation. 190+ questions and dares for couples or friends. Free, no sign-up, works offline."
 />
-<link rel="canonical" href="https://snake-ladder-love-edition.workers.dev/" />
+<link rel="canonical" href="https://ladder-snake.mfrazi.me/" />
 <meta name="robots" content="index, follow, max-image-preview:large" />
 
 <!-- Open Graph (Facebook, WhatsApp, LinkedIn, iMessage) -->
@@ -30,8 +28,8 @@
   property="og:description"
   content="Every square you land on starts a real conversation. 190+ questions, dares and surprises for couples or friends. Free, no sign-up, works offline."
 />
-<meta property="og:url" content="https://snake-ladder-love-edition.workers.dev/" />
-<meta property="og:image" content="https://snake-ladder-love-edition.workers.dev/assets/og-cover.jpg" />
+<meta property="og:url" content="https://ladder-snake.mfrazi.me/" />
+<meta property="og:image" content="https://ladder-snake.mfrazi.me/assets/og-cover.jpg" />
 <meta property="og:image:type" content="image/jpeg" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
@@ -48,7 +46,7 @@
   name="twitter:description"
   content="Every square you land on starts a real conversation. 190+ questions, dares and surprises for couples or friends."
 />
-<meta name="twitter:image" content="https://snake-ladder-love-edition.workers.dev/assets/og-cover.jpg" />
+<meta name="twitter:image" content="https://ladder-snake.mfrazi.me/assets/og-cover.jpg" />
 
 <!-- PWA -->
 <link rel="manifest" href="manifest.json" />
@@ -67,7 +65,7 @@
   "@context": "https://schema.org",
   "@type": "WebApplication",
   "name": "Snake & Ladder: Love & Friends Edition",
-  "url": "https://snake-ladder-love-edition.workers.dev/",
+  "url": "https://ladder-snake.mfrazi.me/",
   "description": "A two-to-six player Snake & Ladder board game where every square you land on starts a conversation. Choose Couples mode or Friends mode for questions, dares and surprises written for who is playing. Runs in the browser, installs as an app, and works offline.",
   "applicationCategory": "GameApplication",
   "operatingSystem": "Any (web browser)",
@@ -75,8 +73,8 @@
   "inLanguage": "en",
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "image": "https://snake-ladder-love-edition.workers.dev/assets/og-cover.jpg",
-  "screenshot": "https://snake-ladder-love-edition.workers.dev/assets/og-cover.jpg",
+  "image": "https://ladder-snake.mfrazi.me/assets/og-cover.jpg",
+  "screenshot": "https://ladder-snake.mfrazi.me/assets/og-cover.jpg",
   "featureList": [
     "Couples mode and Friends mode with different questions and dares",
     "190+ conversation questions across 12 topics",

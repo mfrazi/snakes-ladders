@@ -2,7 +2,7 @@
 // that invalidates the old cache. Kept in sync by eye with the BUILD const
 // in script.js (they can't share a value directly: this file runs in a
 // separate worker context script.js never loads into).
-const CACHE_NAME = 'snake-ladder-v4';
+const CACHE_NAME = 'ladder-snake-v5';
 
 // NOTE: './' only — do not add './index.html'. Cloudflare canonicalises
 // /index.html to / with a 307, and cache.addAll() is unreliable for requests

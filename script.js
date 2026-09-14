@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-14d';
+  const BUILD = '2026-09-14e';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -452,7 +452,7 @@
     }
 
     console.info(
-      `[snake-ladder ${BUILD}] scene "${theme.label}" · motion ${theme.motion} · ` +
+      `[ladder-snake ${BUILD}] scene "${theme.label}" · motion ${theme.motion} · ` +
         `${REDUCED_MOTION ? 'DISABLED (system reduced-motion is on)' : `${page.getAnimations().length} animation(s) on backdrop`}`
     );
   }
@@ -1332,7 +1332,7 @@
 
     const link = document.createElement('a');
     link.href = url;
-    link.download = `snake-ladder-questions-${stamp}.txt`;
+    link.download = `ladder-snake-questions-${stamp}.txt`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1416,7 +1416,7 @@
     );
   }
 
-  function snakeLadderHops(startPos) {
+  function ladderSnakeHops(startPos) {
     const hops = [];
     let pos = startPos;
     let guard = 0;
@@ -1439,7 +1439,7 @@
     await walkToken(playerIndex, player.pos, landedOn);
     player.pos = landedOn;
 
-    for (const hop of snakeLadderHops(landedOn)) {
+    for (const hop of ladderSnakeHops(landedOn)) {
       logMessage(hop.type === 'ladder' ? `🪜 ${hop.from} → ${hop.to}` : `🐍 ${hop.from} → ${hop.to}`);
       if (hop.type === 'ladder') soundLadder();
       else soundSnake();

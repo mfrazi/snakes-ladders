@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "snake-ladder",
+      "name": "ladder-snake",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["serve.py", "8791"],
       "port": 8791

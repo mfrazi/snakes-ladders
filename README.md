@@ -290,7 +290,7 @@ actual dev server** so requests to it would genuinely fail — and confirmed
 `fetch()` for `style.css`, `script.js`, an image, and `index.html` all still
 resolved with the correct byte counts, served from the service worker's
 cache. If you change any precached file, bump `CACHE_NAME` in `sw.js` (e.g.
-`snake-ladder-v2`) — that's what evicts the old cache on the next visit.
+`ladder-snake-v6`) — that's what evicts the old cache on the next visit.
 
 ## Tuning
 
@@ -319,27 +319,18 @@ raw HTML would otherwise find an empty `<body>`. What's there for it:
   keyword block, which is worth less than nothing.
 - **`robots.txt`** and a one-entry **`sitemap.xml`**.
 
-Those absolute URLs are **not** hardcoded to a domain. They carry a
-placeholder origin that `worker.js` rewrites to the real request origin — see
-"What the Worker does" below. A canonical tag naming an origin that no longer
-serves the page tells crawlers to index that other origin instead, which is
-worse than having no canonical at all, so the URL is derived rather than
-remembered.
-
-You can see the rewrite working locally:
-
-```bash
-npm run dev
-curl -s http://localhost:8787/ | grep canonical
-curl -s http://localhost:8787/sitemap.xml | grep loc
-```
-
-Both should echo back `localhost:8787`, not the placeholder.
+Those absolute URLs are hardcoded to the real, live domain,
+`https://ladder-snake.mfrazi.me` — see "Why the domain is hardcoded" below for
+why that's a deliberate choice rather than an oversight, and where all three
+have to be updated together if the domain ever changes. A canonical tag
+naming an origin that no longer serves the page tells crawlers to index that
+other origin instead, which is worse than having no canonical at all — that's
+the failure mode to watch for if this domain ever moves.
 
 ## Deploying to Cloudflare
 
-**Cloudflare Workers is the only deploy target.** Workers serves both the HTML
-and every static file; there is no Pages config. One command, no build step:
+**Cloudflare Workers is the only deploy target**, as a pure static-assets
+Worker — no custom Worker script, no build step:
 
 ```bash
 npm install
@@ -347,10 +338,27 @@ npx wrangler login
 npm run deploy
 ```
 
-Live at `https://snake-ladder-love-edition.<your-subdomain>.workers.dev`.
+The bare Worker address would be
+`https://ladder-snake.<your-subdomain>.workers.dev`. This project's real front
+door is a custom domain attached to that Worker in the Cloudflare dashboard,
+`https://ladder-snake.mfrazi.me`; both resolve to the same deployment.
 
-To run the real Workers runtime locally — the asset server, the Worker and
-`.assetsignore` all behaving as they will in production — use:
+**Check what `wrangler.jsonc`'s `name` currently matches before your next
+deploy.** That field is the Worker's deploy identity — changing it and running
+`wrangler deploy` doesn't rename the Worker that's live, it creates a
+*second*, separate one under the new name. A custom domain stays bound to
+whichever Worker it was attached to in the dashboard; it does not follow a
+name change in this file. If `name` here doesn't match the Worker your custom
+domain actually points at, deploying will update an invisible Worker nobody
+is looking at while the live site keeps serving whatever was deployed last.
+Fixing that mismatch means either moving the custom domain to the
+newly-deployed Worker in the dashboard, or matching `name` back to whatever
+the live Worker is actually called — a Cloudflare-side check, not something
+this repo can confirm on its own (there was no Cloudflare login available
+while writing this).
+
+To run the real Workers runtime locally — the asset server and
+`.assetsignore` behaving as they will in production — use:
 
 ```bash
 npm run dev
@@ -358,35 +366,33 @@ npm run dev
 
 That needs no Cloudflare login. (`npm start` is still the plain `serve.py`
 static server, which is lighter for ordinary UI work but does *not* exercise
-the Worker.)
+the same asset pipeline Cloudflare uses.) One thing worth knowing while
+testing locally this way: `index.html`, `robots.txt`, and `sitemap.xml` all
+hardcode the real production domain (see below), so a local `curl` against
+`localhost:8787` will show `ladder-snake.mfrazi.me` in the canonical tag and
+sitemap, not `localhost` — that's expected, not a bug.
 
-### What the Worker does
+### Why the domain is hardcoded
 
-Almost nothing, by design. `wrangler.jsonc` routes only four paths through
-`worker.js` — `/`, `/index.html`, `/robots.txt`, `/sitemap.xml` — via
-`run_worker_first`. Everything else (CSS, JS, textures, icons) is served
-straight from Cloudflare's asset storage and never invokes the Worker at all,
-so the common case costs nothing.
+`index.html`'s canonical tag, `og:url`, both image URLs, and the JSON-LD
+`url`, plus `robots.txt`'s `Sitemap:` line and `sitemap.xml`'s `<loc>`, all
+name the site's own address directly: `https://ladder-snake.mfrazi.me`. If you
+change domains, update all three files together.
 
-Its one job is the absolute URLs in the SEO metadata. Those have to name the
-site's own origin, and they have to be absolute — but a workers.dev address
-contains the account's own subdomain, which isn't knowable from the repo, and
-the site may later move to a custom domain. So the files carry a placeholder
-origin and the Worker swaps it for the real request origin on the way out.
-That keeps the canonical tag, `og:url`, both image URLs, the JSON-LD `url`,
-the sitemap `<loc>` and the `Sitemap:` line correct on workers.dev, on a
-custom domain, and on preview deployments, with nothing to remember to update.
-
-The rewrite is a literal string match, so if you change the placeholder,
-change it in all four places: `index.html`, `robots.txt`, `sitemap.xml`, and
-`PLACEHOLDER_ORIGIN` in `worker.js`.
+This used to be dynamic — a tiny Worker script rewrote a placeholder origin to
+whatever host the request actually arrived on, because at the time the
+eventual workers.dev subdomain wasn't knowable from the repo. Now that the
+real, permanent custom domain is settled, that indirection has no job left to
+do: hardcoding is simpler, needs no Worker invocation on every request, and
+is what the placeholder mechanism was always going to resolve to anyway. If
+this site ever moves to a different domain, hardcoding is still the right
+call — just update the three files above with the new one.
 
 ### What actually ships
 
 `.assetsignore` (same syntax as `.gitignore`) skips everything that isn't part
 of the deployed site — `serve.py`, `wrangler.jsonc`, `package.json`, docs,
-`LICENSE`, `.claude/`, and `worker.js` itself, which Wrangler loads at build
-time and which would otherwise *also* be uploaded and served at `/worker.js`.
+`LICENSE`, and `.claude/`.
 
 Don't trust the file count Wrangler prints. `wrangler deploy --dry-run` says
 it "Read 158 files" here, which is more files than exist in the repo — that

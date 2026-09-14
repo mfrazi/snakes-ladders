@@ -5,11 +5,6 @@
 #
 # robots.txt and sitemap.xml must NOT be added here — they only do their job
 # if crawlers can fetch them from the deployed origin.
-#
-# worker.js must be here: it is the Worker's own source, loaded by Wrangler at
-# build time. Without this line it would ALSO be uploaded as a static asset and
-# served at /worker.js.
-worker.js
 wrangler.jsonc
 serve.py
 package.json

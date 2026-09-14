@@ -1,5 +1,5 @@
 {
-  "name": "snake-ladder-love-edition",
+  "name": "ladder-snake",
   "private": true,
   "version": "1.0.0",
   "description": "A Snake & Ladder game for couples or friends where every square starts a conversation — plain HTML/CSS/JS, deployable as a static site.",
