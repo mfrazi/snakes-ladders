@@ -299,7 +299,7 @@ layer deeper and harder to notice. Network-first means a player who's online
 always gets the current build.
 
 I verified this for real rather than trusting the code: registered the
-service worker, confirmed it precached all 14 core files, then **killed the
+service worker, confirmed it precached all 13 core files, then **killed the
 actual dev server** so requests to it would genuinely fail — and confirmed
 `fetch()` for `style.css`, `script.js`, an image, and `index.html` all still
 resolved with the correct byte counts, served from the service worker's
@@ -314,6 +314,82 @@ there changes both the timing and the animation.
 
 Board density lives in `BOARD_SETUP` in `data.js` (`ladders`, `snakes`,
 `surpriseChance`).
+
+## Page performance
+
+Response to a Lighthouse/PageSpeed audit against the live site. What each
+finding turned out to be, and what was actually done about it:
+
+- **Render-blocking requests.** `style.css`'s `<link>` sat at the very
+  bottom of `<head>`, discovered only after the browser's preload scanner
+  parsed through ~15 meta tags and a large inline JSON-LD block. It's now
+  the first thing in `<head>`, right after charset/viewport — the only
+  render-blocking request on the page, so it should be the first thing
+  discovered, not the last.
+- **Improve image delivery.** The six board-scene photos were JPEG at
+  113–266 KB each; the two 512×512 manifest icons were PNG at **293 KB
+  each** — absurdly heavy for a 512px icon. Converted everything to WebP
+  with `cwebp`: the textures to 59–190 KB (29–48% smaller), the icons to
+  16 KB each (a 95% reduction). Verified visually before committing to it —
+  read both back as images, no visible artifacting or color shift — and
+  confirmed nothing else still referenced the deleted originals before
+  removing them. `icon-192.png`/`icon-32.png`/`icon-180.png` stay PNG
+  deliberately: they're favicons and the `apple-touch-icon`, where format
+  compatibility matters more than the (already small) file size, and Apple
+  ignores the web manifest's own icons for "Add to Home Screen" anyway, so
+  changing `icon-512`/`icon-maskable-512` in `manifest.json` to WebP has no
+  effect on iOS.
+- **Use efficient cache lifetimes.** Every response — HTML, JS, CSS,
+  textures, icons, all of it — was served `Cache-Control: public,
+  max-age=0, must-revalidate`, Cloudflare's blanket default. Fine for code
+  that changes on every feature; wasteful for a texture that's never
+  touched again after launch. Added `_headers` (Cloudflare's per-path
+  header config, confirmed working for a Workers static-assets deploy, not
+  just Pages, via a real `wrangler dev` run — its log line literally said
+  "Parsed 2 valid header rules") giving `/assets/*` and `/icons/*` a 30-day
+  cache. **Deliberately not 30 days for anything else, and deliberately not
+  a full year for those either** — this project already spent real
+  debugging time on the exact bug a long, un-revalidated cache causes (see
+  "On the caching bug from earlier in this project" below); `script.js`,
+  `style.css`, `data.js`, `sw.js`, `index.html`, and `manifest.json` keep
+  Cloudflare's default untouched.
+- **Legacy JavaScript / 3rd parties.** Not this project's code. The live
+  page has zero third-party scripts by design — no CDN libraries, no
+  analytics, nothing. What Lighthouse is actually seeing is a script
+  Cloudflare itself injects at the edge (`/cdn-cgi/challenge-platform/...`),
+  tied to a security feature on the Cloudflare zone (something like Browser
+  Integrity Check or a JS challenge), confirmed by literally reading the
+  response body of the live page. No source change here can touch that —
+  it's a Cloudflare dashboard setting, and this repo has no login to check
+  or change it.
+- **Minify CSS / Minify JavaScript.** Done, but deliberately kept out of
+  the editing path. `npm run build` (`scripts/build.js`) reads `script.js`,
+  `data.js`, `sw.js`, and `style.css`, minifies them with `terser` and
+  `clean-css`, and writes a `dist/` containing exactly what ships — every
+  other file (`index.html`, `manifest.json`, `robots.txt`, `sitemap.xml`,
+  `_headers`, `assets/`, `icons/`) copied through byte-for-byte. `npm run
+  deploy` runs the build automatically, then points `wrangler deploy` at
+  `dist/` with `--assets`. Editing and local preview
+  (`npm start`/`npm run dev`) never touch `dist/` and never run the
+  minifier — the source you edit is always the real, plain, unminified
+  file it always was.
+
+  `data.js` needed care: it has no module system and no wrapping IIFE, so
+  its top-level `const BOARD_THEMES = ...` (and friends) are real globals
+  that `script.js` — a separate `<script>` tag, loaded after it — reaches
+  by name. Mangling top-level names would rename `BOARD_THEMES` in
+  `data.js` while `script.js` kept asking for that exact literal
+  identifier, silently breaking the whole app the moment mangle ran.
+  `toplevel: false` (terser's own default — set explicitly here so it can
+  never change by accident) keeps every top-level name exactly as written.
+
+  Verified with more than a syntax check: built `dist/`, swapped the four
+  minified files into the real project root, played an actual turn through
+  it — rolled, moved, landed on a tile, answered a question, watched the
+  score update and the turn advance — then registered `sw.js` from that
+  same minified build and confirmed all 13 core files precached correctly,
+  before restoring the originals byte-for-byte. `dist/` itself is
+  build output, not source — gitignored, never committed.
 
 ## Search and sharing
 
@@ -344,7 +420,8 @@ the failure mode to watch for if this domain ever moves.
 ## Deploying to Cloudflare
 
 **Cloudflare Workers is the only deploy target**, as a pure static-assets
-Worker — no custom Worker script, no build step:
+Worker — no custom Worker script. One command runs the minify step below and
+deploys the result:
 
 ```bash
 npm install

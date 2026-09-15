@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
 <!--
+  Stylesheet comes first in <head>, ahead of every meta tag and the JSON-LD
+  block below. It's the only render-blocking request on this page, so it
+  should be the first thing the browser's preload scanner finds — buried at
+  the bottom of a long <head> (where it sat before), discovery was delayed
+  behind everything else here, which is pure wasted time on a resource that
+  was always going to have to load before first paint regardless.
+-->
+<link rel="stylesheet" href="style.css" />
+
+<!--
   SEO. The origin below is hardcoded to the real, live domain — matching
   robots.txt and sitemap.xml. It used to be a placeholder that a Worker
   rewrote at request time (useful while the eventual domain was still
@@ -87,8 +97,6 @@
   ]
 }
 </script>
-
-<link rel="stylesheet" href="style.css" />
 </head>
 <body>
 

@@ -1,23 +1,30 @@
 // Cloudflare Workers — the only deploy target for this site. A pure static
-// assets Worker: no custom fetch handler, no build step. Every request is
-// served straight from Cloudflare's asset storage.
+// assets Worker: no custom fetch handler. Every request is served straight
+// from Cloudflare's asset storage.
 //
-//   npm run deploy     -> wrangler deploy
-//   npm run dev        -> wrangler dev (local, no login needed)
+// The "directory" below (used by `wrangler dev` and by a bare `wrangler
+// deploy`) is the plain, unminified repo root — no build step to run this
+// locally. The real deploy path overrides it: `npm run deploy` runs
+// scripts/build.js first and calls `wrangler deploy --assets=dist` instead,
+// so what's actually served is the minified build. See "Minify CSS /
+// Minify JavaScript" in README.md for why that lives entirely outside this
+// file rather than as a "main" Worker script.
+//
+//   npm run deploy     -> npm run build && wrangler deploy --assets=dist
+//   npm run dev        -> wrangler dev (local, no login needed, no build)
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ladder-snake",
   "compatibility_date": "2026-09-13",
 
   "assets": {
-    // The repo root already IS the site; there is no build step.
-    //
+    "directory": ".",
+
     // No "binding" here — that's only valid when a Worker script (a "main")
     // actually reads it via env.ASSETS.fetch(). This is a pure assets-only
     // Worker with no script at all, and wrangler dev refuses to start
     // ("Cannot use assets with a binding in an assets-only Worker") if the
     // binding is present without one. Confirmed by actually running it, not
     // just by reading Cloudflare's docs.
-    "directory": "."
   }
 }

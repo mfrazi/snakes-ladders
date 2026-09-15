@@ -1,0 +1,20 @@
+# Long, safe cache lifetimes for genuinely static binary assets that never
+# change without a deliberate edit-and-redeploy — board textures and the PWA
+# install icons. 30 days, not a full year: these have no cache-busting hash
+# in their filenames, so a browser or edge cache that held one for a full
+# year would keep serving it after a real update. 30 days bounds that risk
+# to something a maintainer would actually notice, while still comfortably
+# clearing the threshold Lighthouse's "efficient cache lifetimes" audit
+# checks for.
+#
+# Deliberately NOT applied to script.js, style.css, data.js, sw.js,
+# index.html, or manifest.json — those change on every feature, and this
+# project already spent real debugging time on exactly the bug a long cache
+# on those would reintroduce (see the README's caching-bug history). They
+# keep Cloudflare's default `public, max-age=0, must-revalidate` with an
+# ETag: always re-checked, never blindly held past its actual staleness.
+/assets/*
+  Cache-Control: public, max-age=2592000, must-revalidate
+
+/icons/*
+  Cache-Control: public, max-age=2592000, must-revalidate

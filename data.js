@@ -32,7 +32,7 @@ const BOARD_THEMES = {
     cellTexture:
       "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><g stroke='#b07a8e' stroke-opacity='0.09' stroke-width='1'><path d='M0 4h16M0 12h16'/><path d='M4 0v16M12 0v16'/></g></svg>",
     cellTextureSize: '16px 16px',
-    photo: 'assets/textures/romance.jpg',
+    photo: 'assets/textures/romance.webp',
     photoPageSize: '420px',
     photoPageOpacity: 0.42,
     photoBoardSize: '180px',
@@ -60,7 +60,7 @@ const BOARD_THEMES = {
     cellTexture:
       "<svg xmlns='http://www.w3.org/2000/svg' width='60' height='24'><g stroke='#5a7a48' stroke-opacity='0.09' stroke-width='1' fill='none'><path d='M0 6q15-4 30 0t30 0'/><path d='M0 14q15 4 30 0t30 0'/><path d='M0 21q15-3 30 0t30 0'/></g></svg>",
     cellTextureSize: '60px 24px',
-    photo: 'assets/textures/forest.jpg',
+    photo: 'assets/textures/forest.webp',
     photoPageSize: '460px',
     photoPageOpacity: 0.40,
     photoBoardSize: '200px',
@@ -86,7 +86,7 @@ const BOARD_THEMES = {
       "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60'><g stroke='#1c5f6a' stroke-opacity='0.1' stroke-width='1.6' fill='none' stroke-linecap='round'><path d='M0 16q15-10 30 0t30 0 30 0 30 0'/><path d='M0 40q15-10 30 0t30 0 30 0 30 0'/></g></svg>",
     pageTextureSize: '120px 60px',
     cellTextureSize: '40px 20px',
-    photo: 'assets/textures/ocean.jpg',
+    photo: 'assets/textures/ocean.webp',
     photoPageSize: '440px',
     photoPageOpacity: 0.45,
     photoBoardSize: '190px',
@@ -116,7 +116,7 @@ const BOARD_THEMES = {
     cellTexture:
       "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><g fill='#5b7d26' fill-opacity='0.09'><circle cx='6' cy='7' r='1.4'/><circle cx='18' cy='16' r='1.2'/><circle cx='12' cy='3' r='1'/><circle cx='3' cy='19' r='1'/></g></svg>",
     cellTextureSize: '24px 24px',
-    photo: 'assets/textures/meadow.jpg',
+    photo: 'assets/textures/meadow.webp',
     photoPageSize: '400px',
     photoPageOpacity: 0.42,
     photoBoardSize: '175px',
@@ -144,7 +144,7 @@ const BOARD_THEMES = {
     cellTexture:
       "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><g fill='#9c5a30' fill-opacity='0.08'><circle cx='4' cy='5' r='1'/><circle cx='14' cy='12' r='1.1'/><circle cx='9' cy='17' r='0.9'/></g></svg>",
     cellTextureSize: '20px 20px',
-    photo: 'assets/textures/sunset.jpg',
+    photo: 'assets/textures/sunset.webp',
     photoPageSize: '450px',
     photoPageOpacity: 0.42,
     photoBoardSize: '195px',
@@ -172,7 +172,7 @@ const BOARD_THEMES = {
     cellTexture:
       "<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30'><g fill='#9aa4ca' fill-opacity='0.18'><circle cx='7' cy='8' r='0.9'/><circle cx='22' cy='19' r='0.7'/><circle cx='16' cy='27' r='0.6'/></g></svg>",
     cellTextureSize: '30px 30px',
-    photo: 'assets/textures/night.jpg',
+    photo: 'assets/textures/night.webp',
     photoPageSize: '480px',
     photoPageOpacity: 0.55,
     photoBoardSize: '210px',

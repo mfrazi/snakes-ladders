@@ -6,9 +6,12 @@
   "scripts": {
     "start": "python3 serve.py",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "build": "node scripts/build.js",
+    "deploy": "npm run build && wrangler deploy --assets=dist"
   },
   "devDependencies": {
+    "clean-css": "^5.3.3",
+    "terser": "^5.51.2",
     "wrangler": "4.131.2"
   }
 }

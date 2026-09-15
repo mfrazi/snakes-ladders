@@ -2,7 +2,7 @@
 // that invalidates the old cache. Kept in sync by eye with the BUILD const
 // in script.js (they can't share a value directly: this file runs in a
 // separate worker context script.js never loads into).
-const CACHE_NAME = 'ladder-snake-v6';
+const CACHE_NAME = 'ladder-snake-v7';
 
 // NOTE: './' only — do not add './index.html'. Cloudflare canonicalises
 // /index.html to / with a 307, and cache.addAll() is unreliable for requests
@@ -15,14 +15,14 @@ const CORE_ASSETS = [
   './script.js',
   './data.js',
   './manifest.json',
-  './assets/textures/romance.jpg',
-  './assets/textures/forest.jpg',
-  './assets/textures/ocean.jpg',
-  './assets/textures/meadow.jpg',
-  './assets/textures/sunset.jpg',
-  './assets/textures/night.jpg',
+  './assets/textures/romance.webp',
+  './assets/textures/forest.webp',
+  './assets/textures/ocean.webp',
+  './assets/textures/meadow.webp',
+  './assets/textures/sunset.webp',
+  './assets/textures/night.webp',
   './icons/icon-192.png',
-  './icons/icon-512.png',
+  './icons/icon-512.webp',
 ];
 
 self.addEventListener('install', (event) => {
