@@ -544,7 +544,16 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: var(--rose);
+  /* --rose-deep, not --rose. White on the plain scene accent fails WCAG AA
+     on five of the six scenes — meadow was worst at 2.94:1 against a 4.5:1
+     floor (this is 15px/600, which is not "large text", so 3:1 doesn't
+     apply). An audit only caught whichever scene it happened to load, but
+     the maths says romance was the only one passing, and only at 4.62:1.
+     Every accentDeep clears it, worst 4.77:1 on meadow, and they're
+     hand-picked palette colours rather than an algorithmic darkening — this
+     button already turned --rose-deep on hover, so it now simply rests at
+     the colour it used to hover to. */
+  background: var(--rose-deep);
   color: #fff;
   border: none;
   padding: 12px 22px;
@@ -557,7 +566,10 @@ button {
 }
 
 .primary-btn:hover {
-  background: var(--rose-deep);
+  /* Has to go a step darker than the resting state now that resting IS
+     --rose-deep, or hovering would do nothing. Darker only ever raises
+     contrast against white, so this can't fail the check above. */
+  background: color-mix(in srgb, var(--rose-deep) 84%, #000);
 }
 
 .primary-btn:active {

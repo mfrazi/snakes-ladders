@@ -15,6 +15,23 @@
 <link rel="stylesheet" href="style.css" />
 
 <!--
+  Both scripts are `defer`, and in <head> rather than at the end of <body>.
+  They used to be plain synchronous tags before </body>, which an audit
+  flagged as render-blocking at ~600ms each: the browser would not paint the
+  markup it had already parsed until both had downloaded and run, so the <h1>
+  below — the LCP element, and present in this HTML from the start — waited
+  on 170KB of JavaScript that has nothing to do with drawing it.
+
+  `defer` keeps everything the old placement guaranteed: the two run in
+  document order (data.js defines the globals script.js reads), after parsing
+  is complete, and before DOMContentLoaded — which is the event script.js
+  bootstraps from. Moving them up here just lets the preload scanner start
+  fetching sooner, in parallel with the stylesheet instead of after it.
+-->
+<script defer src="data.js"></script>
+<script defer src="script.js"></script>
+
+<!--
   SEO. The origin below is hardcoded to the real, live domain — matching
   robots.txt and sitemap.xml. It used to be a placeholder that a Worker
   rewrote at request time (useful while the eventual domain was still
@@ -482,8 +499,5 @@
 
 <!-- Win confetti is appended here -->
 <div id="confetti" class="confetti" aria-hidden="true"></div>
-
-<script src="data.js"></script>
-<script src="script.js"></script>
 </body>
 </html>
