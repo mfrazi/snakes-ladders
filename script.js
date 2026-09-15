@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-15c';
+  const BUILD = '2026-09-15d';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -2292,6 +2292,10 @@
     $('surprise-ok-btn').addEventListener('click', closeSurpriseModal);
     $('play-again-btn').addEventListener('click', playAgain);
     $('new-players-btn').addEventListener('click', newPlayers);
+    // Play again/New players both wipe state.answers immediately, so this has
+    // to be the last chance to grab the transcript — same downloadAnswers()
+    // the in-game history drawer uses.
+    $('win-download-btn').addEventListener('click', downloadAnswers);
 
     $('log-btn').addEventListener('click', () => {
       renderLog();

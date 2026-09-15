@@ -108,6 +108,13 @@ body,
    auto-height, not the viewport. */
 main {
   height: 100%;
+  /* 100% resolves against the LARGEST mobile viewport (address bar hidden),
+     not what's actually visible — with overflow:hidden below, that pushed
+     the roll button and turn-banner under the browser's own chrome with no
+     way to scroll to them. dvh tracks the real, current viewport as the
+     address bar shows/hides. Invalid in browsers without dvh support, which
+     keeps the height:100% above instead — safe fallback, not a regression. */
+  height: 100dvh;
 }
 
 body {
@@ -411,15 +418,21 @@ button {
   color: var(--ink);
 }
 
+/* A fixed-column grid, not flex-wrap: twelve pills of very different label
+   lengths ("Love" vs "Home & Family") wrapped into ragged, unaligned rows
+   under flex-wrap — every row started flush left but ended at a different
+   x, so nothing lined up top-to-bottom. A grid gives every chip the same
+   column width, so the whole block reads as one tidy checklist. */
 .theme-chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 6px;
 }
 
 .theme-chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   border: 1px solid var(--line);
   background: var(--panel-2);
