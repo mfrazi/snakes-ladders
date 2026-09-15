@@ -1,18 +1,47 @@
+# Cloudflare per-path response headers. Only applies to the deployed site —
+# serve.py (local dev) doesn't read this file, so test header changes with
+# `npm run dev` (real Workers runtime), not `npm start`.
+
+/*
+  # A strict CSP is cheap here because the app was already built to suit one:
+  # no inline <style>, no style="" attributes, no inline event handlers, and
+  # the only inline <script> is the JSON-LD block (a data block browsers never
+  # execute, so script-src doesn't apply to it). Everything else is
+  # same-origin. Runtime styling all goes through el.style.setProperty(),
+  # which is CSSOM and outside CSP's scope.
+  #
+  # Worth having despite there being no known XSS hole: the AI API key lives
+  # in localStorage, and a CSP is what stops a future injected script from
+  # reading it and shipping it somewhere. connect-src is the load-bearing
+  # part — it pins outbound requests to the three AI providers the settings
+  # panel actually offers, so exfiltration to any other host is blocked.
+  #
+  # data: in img-src is required — the animated board textures are inline
+  # SVG strings turned into data: URIs at runtime (see applyTextures()).
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  # Nothing here is meant to be framed, and the game is a single trusted
+  # surface — framing it only enables clickjacking. frame-ancestors above is
+  # the modern equivalent; this covers browsers that still only read this.
+  X-Frame-Options: DENY
+  # Stops a browser from MIME-sniffing a response into something executable.
+  X-Content-Type-Options: nosniff
+  # Don't leak the page URL to third parties. Nothing here needs a Referer.
+  Referrer-Policy: no-referrer
+  # None of these device APIs are used; deny them rather than inherit defaults.
+  Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=(), usb=()
+
 # Long, safe cache lifetimes for genuinely static binary assets that never
-# change without a deliberate edit-and-redeploy — board textures and the PWA
-# install icons. 30 days, not a full year: these have no cache-busting hash
-# in their filenames, so a browser or edge cache that held one for a full
-# year would keep serving it after a real update. 30 days bounds that risk
-# to something a maintainer would actually notice, while still comfortably
-# clearing the threshold Lighthouse's "efficient cache lifetimes" audit
-# checks for.
+# change without a deliberate edit-and-redeploy — board textures, install
+# icons, store screenshots. 30 days, not a full year: these have no
+# cache-busting hash in their filenames, so a cache holding one for a year
+# would keep serving it past a real update. 30 days bounds that risk while
+# still clearing Lighthouse's "efficient cache lifetimes" threshold.
 #
 # Deliberately NOT applied to script.js, style.css, data.js, sw.js,
 # index.html, or manifest.json — those change on every feature, and this
 # project already spent real debugging time on exactly the bug a long cache
-# on those would reintroduce (see the README's caching-bug history). They
-# keep Cloudflare's default `public, max-age=0, must-revalidate` with an
-# ETag: always re-checked, never blindly held past its actual staleness.
+# on those would reintroduce. They keep Cloudflare's default
+# `public, max-age=0, must-revalidate` with an ETag.
 /assets/*
   Cache-Control: public, max-age=2592000, must-revalidate
 

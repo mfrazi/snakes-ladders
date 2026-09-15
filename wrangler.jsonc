@@ -6,9 +6,9 @@
 // deploy`) is the plain, unminified repo root — no build step to run this
 // locally. The real deploy path overrides it: `npm run deploy` runs
 // scripts/build.js first and calls `wrangler deploy --assets=dist` instead,
-// so what's actually served is the minified build. See "Minify CSS /
-// Minify JavaScript" in README.md for why that lives entirely outside this
-// file rather than as a "main" Worker script.
+// so what's actually served is the minified build. See "Build and deploy" in
+// AGENTS.md for why that lives entirely outside this file rather than as a
+// "main" Worker script.
 //
 //   npm run deploy     -> npm run build && wrangler deploy --assets=dist
 //   npm run dev        -> wrangler dev (local, no login needed, no build)

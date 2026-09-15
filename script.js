@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-15d';
+  const BUILD = '2026-09-15e';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -1921,9 +1921,14 @@
     gemini: {
       label: 'Gemini',
       defaultModel: 'gemini-2.0-flash',
-      url: (model, key) =>
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
-      headers: () => ({ 'content-type': 'application/json' }),
+      // Key goes in the x-goog-api-key header, NOT the ?key= query param
+      // Google's docs also show. A secret in a URL leaks everywhere URLs
+      // go — Referer headers on any cross-origin subresource, the browser's
+      // own history, and any proxy or error log in between. A header goes
+      // only to the host it's addressed to.
+      url: (model) =>
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      headers: (key) => ({ 'content-type': 'application/json', 'x-goog-api-key': key }),
       body: (model, prompt) => ({ contents: [{ parts: [{ text: prompt }] }] }),
       extract: (data) => data.candidates[0].content.parts.map((p) => p.text).join('\n'),
     },
@@ -2248,9 +2253,91 @@
     });
   }
 
+  // ---------- Install (PWA) ----------
+  // There was no install affordance at all before this, which is why the app
+  // looked "not installable": Chrome stopped showing an automatic install
+  // popup years ago — it fires beforeinstallprompt and leaves it to the page
+  // to ask. Without a call to prompt(), the only entry point is a menu item
+  // most people never open. iOS is worse: Safari never fires the event and
+  // exposes no install API whatsoever, so the only honest thing to offer
+  // there is instructions.
+  let installPrompt = null;
+
+  function isIos() {
+    // iPadOS 13+ reports itself as a Mac, so the touch check is what
+    // separates an iPad from a desktop Safari that genuinely can install.
+    return (
+      /iphone|ipod|ipad/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    );
+  }
+
+  function isStandalone() {
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      // iOS Safari's own non-standard flag — it doesn't set display-mode.
+      navigator.standalone === true
+    );
+  }
+
+  function initInstall() {
+    const btn = $('install-btn');
+    if (!btn) return;
+
+    // Already installed and running from the home screen: offering "Install"
+    // again is noise.
+    if (isStandalone()) return;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Chrome/Edge: suppress the browser's own mini-infobar so this button
+      // is the single install entry point, then keep the event — it can only
+      // be used once, and only from a real user gesture.
+      e.preventDefault();
+      installPrompt = e;
+      btn.classList.remove('hidden');
+    });
+
+    window.addEventListener('appinstalled', () => {
+      installPrompt = null;
+      btn.classList.add('hidden');
+    });
+
+    if (isIos()) {
+      // No event is coming, so show it immediately — the click just explains
+      // the manual route.
+      btn.classList.remove('hidden');
+    }
+
+    btn.addEventListener('click', async () => {
+      if (installPrompt) {
+        installPrompt.prompt();
+        await installPrompt.userChoice;
+        // Consumed either way: a dismissed prompt can't be re-shown with the
+        // same event, and Chrome fires a fresh one if the user comes back.
+        installPrompt = null;
+        btn.classList.add('hidden');
+        return;
+      }
+      // Name the actual device — an iPad user told to look on their "iPhone"
+      // reasonably wonders whether these are the right instructions at all.
+      const ipad = /ipad/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      $('install-title').textContent = ipad ? 'Install on your iPad' : isIos() ? 'Install on your iPhone' : 'Install this app';
+      $('install-note').textContent = isIos()
+        ? ''
+        : "If you don't see an install option, this browser may not support installing web apps — Chrome, Edge or Safari can.";
+      $('install-modal').classList.remove('hidden');
+    });
+
+    $('install-close-btn').addEventListener('click', () => $('install-modal').classList.add('hidden'));
+    $('install-modal').addEventListener('click', (e) => {
+      if (e.target === $('install-modal')) $('install-modal').classList.add('hidden');
+    });
+  }
+
   function init() {
     applyAnimationSpeeds();
     registerServiceWorker();
+    initInstall();
     aiConfig = loadAiConfig();
     loadMode();
     initRoster();

@@ -1351,6 +1351,30 @@ button {
   margin: 6px 0 16px;
 }
 
+/* Numbered steps for the iOS install instructions — the one place the app
+   has to explain a route it can't just perform for you. */
+.install-steps {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.install-steps strong {
+  font-weight: 640;
+}
+
+/* Sits on the text baseline rather than the line box's top, so the Share
+   glyph reads as part of the sentence instead of floating above it. */
+.install-step-icon {
+  vertical-align: -3px;
+  margin: 0 1px;
+}
+
 .input-label {
   display: block;
   font-size: 11px;
