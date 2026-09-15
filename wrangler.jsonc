@@ -14,7 +14,7 @@
 //   npm run dev        -> wrangler dev (local, no login needed, no build)
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ladder-snake",
+  "name": "snakes-ladders",
   "compatibility_date": "2026-09-13",
 
   "assets": {

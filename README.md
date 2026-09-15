@@ -315,7 +315,7 @@ actual dev server** so requests to it would genuinely fail — and confirmed
 `fetch()` for `style.css`, `script.js`, an image, and `index.html` all still
 resolved with the correct byte counts, served from the service worker's
 cache. If you change any precached file, bump `CACHE_NAME` in `sw.js` (e.g.
-`ladder-snake-v6`) — that's what evicts the old cache on the next visit.
+`snakes-ladders-v6`) — that's what evicts the old cache on the next visit.
 
 ## Tuning
 
@@ -421,7 +421,7 @@ raw HTML would otherwise find an empty `<body>`. What's there for it:
 - **`robots.txt`** and a one-entry **`sitemap.xml`**.
 
 Those absolute URLs are hardcoded to the real, live domain,
-`https://ladder-snake.mfrazi.me` — see "Why the domain is hardcoded" below for
+`https://snakes-ladders.mfrazi.me` — see "Why the domain is hardcoded" below for
 why that's a deliberate choice rather than an oversight, and where all three
 have to be updated together if the domain ever changes. A canonical tag
 naming an origin that no longer serves the page tells crawlers to index that
@@ -441,9 +441,9 @@ npm run deploy
 ```
 
 The bare Worker address would be
-`https://ladder-snake.<your-subdomain>.workers.dev`. This project's real front
+`https://snakes-ladders.<your-subdomain>.workers.dev`. This project's real front
 door is a custom domain attached to that Worker in the Cloudflare dashboard,
-`https://ladder-snake.mfrazi.me`; both resolve to the same deployment.
+`https://snakes-ladders.mfrazi.me`; both resolve to the same deployment.
 
 **Check what `wrangler.jsonc`'s `name` currently matches before your next
 deploy.** That field is the Worker's deploy identity — changing it and running
@@ -471,14 +471,14 @@ static server, which is lighter for ordinary UI work but does *not* exercise
 the same asset pipeline Cloudflare uses.) One thing worth knowing while
 testing locally this way: `index.html`, `robots.txt`, and `sitemap.xml` all
 hardcode the real production domain (see below), so a local `curl` against
-`localhost:8787` will show `ladder-snake.mfrazi.me` in the canonical tag and
+`localhost:8787` will show `snakes-ladders.mfrazi.me` in the canonical tag and
 sitemap, not `localhost` — that's expected, not a bug.
 
 ### Why the domain is hardcoded
 
 `index.html`'s canonical tag, `og:url`, both image URLs, and the JSON-LD
 `url`, plus `robots.txt`'s `Sitemap:` line and `sitemap.xml`'s `<loc>`, all
-name the site's own address directly: `https://ladder-snake.mfrazi.me`. If you
+name the site's own address directly: `https://snakes-ladders.mfrazi.me`. If you
 change domains, update all three files together.
 
 This used to be dynamic — a tiny Worker script rewrote a placeholder origin to

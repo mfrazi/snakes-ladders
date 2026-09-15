@@ -1,17 +1,14 @@
 {
-  "name": "ladder-snake",
+  "name": "snakes-ladders",
   "private": true,
   "version": "1.0.0",
-  "description": "A Snake & Ladder game for couples or friends where every square starts a conversation — plain HTML/CSS/JS, deployable as a static site.",
+  "description": "A Ladder & Snake game for couples or friends where every square starts a conversation — plain HTML/CSS/JS, deployable as a static site.",
   "scripts": {
     "start": "python3 serve.py",
     "dev": "wrangler dev",
-    "build": "node scripts/build.js",
-    "deploy": "npm run build && wrangler deploy --assets=dist"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
-    "clean-css": "^5.3.3",
-    "terser": "^5.51.2",
-    "wrangler": "4.131.2"
+    "wrangler": "latest"
   }
 }

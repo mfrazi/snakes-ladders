@@ -452,7 +452,7 @@
     }
 
     console.info(
-      `[ladder-snake ${BUILD}] scene "${theme.label}" · motion ${theme.motion} · ` +
+      `[snakes-ladders ${BUILD}] scene "${theme.label}" · motion ${theme.motion} · ` +
         `${REDUCED_MOTION ? 'DISABLED (system reduced-motion is on)' : `${page.getAnimations().length} animation(s) on backdrop`}`
     );
   }
@@ -1332,7 +1332,7 @@
 
     const link = document.createElement('a');
     link.href = url;
-    link.download = `ladder-snake-questions-${stamp}.txt`;
+    link.download = `snakes-ladders-questions-${stamp}.txt`;
     document.body.appendChild(link);
     link.click();
     link.remove();

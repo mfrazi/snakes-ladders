@@ -8,4 +8,4 @@ Allow: /
 # nothing to disallow here. Listing paths that don't exist would only advertise
 # them.
 
-Sitemap: https://ladder-snake.mfrazi.me/sitemap.xml
+Sitemap: https://snakes-ladders.mfrazi.me/sitemap.xml
