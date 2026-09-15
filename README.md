@@ -1,6 +1,6 @@
-# ❤️ Snake & Ladder: Love & Friends Edition
+# ❤️ Snakes & Ladders: Love & Friends Edition
 
-A Snake & Ladder game for 2–6 people sharing one device. Every square you land
+A Snakes & Ladders game for 2–6 people sharing one device. Every square you land
 on starts a conversation — a themed question or a surprise — and the board is
 rebuilt from scratch every game.
 

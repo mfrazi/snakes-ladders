@@ -1304,7 +1304,7 @@
   // downloadable so a couple can keep what they told each other.
   function buildTranscript() {
     const lines = [];
-    lines.push('Snake & Ladder — Love & Friends Edition');
+    lines.push('Snakes & Ladders — Love & Friends Edition');
     lines.push(`Players: ${state.players.map((p) => `${p.emoji} ${p.name}`).join('  ·  ')}`);
     lines.push(`Mode: ${(MODES[state.mode] || MODES.couples).label}`);
     lines.push(`Exported: ${new Date().toLocaleString()}`);

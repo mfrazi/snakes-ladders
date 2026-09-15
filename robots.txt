@@ -1,4 +1,4 @@
-# Snake & Ladder: Love & Friends Edition
+# Snakes & Ladders: Love & Friends Edition
 # Everything here is a static, public game — nothing to keep out of an index.
 
 User-agent: *
