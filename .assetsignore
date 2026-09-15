@@ -1,19 +1,13 @@
-# Dev-only files — excluded from what actually gets uploaded to Cloudflare.
-# Same gitignore-style syntax, honored by `wrangler deploy`; the deployed site
-# only needs index.html, style.css, script.js, data.js, manifest.json, sw.js,
-# robots.txt, sitemap.xml, _headers, assets/, and icons/.
+# Dormant safety net. Deploys now come from dist/ (wrangler.jsonc's
+# assets.directory), and wrangler reads .assetsignore from inside the assets
+# directory — so this file is only consulted if that is ever pointed back at
+# the repo root. dist/ needs no equivalent: scripts/build.js decides what goes
+# in it, so nothing dev-only is ever there to exclude.
 #
-# robots.txt and sitemap.xml must NOT be added here — they only do their job
-# if crawlers can fetch them from the deployed origin. Same for _headers: it
-# has to reach Cloudflare's asset storage for the per-path Cache-Control
-# rules in it to take effect at all — Cloudflare reads it, then serves it as
-# config rather than as a public file (confirmed: /_headers itself 404s).
-#
-# This list only matters for a bare `wrangler deploy` run straight from the
-# repo root. The real deploy path (`npm run deploy`) never reaches it at
-# all — it deploys from dist/, a scripts/build.js output that only ever
-# contains the files above in the first place, minified. `scripts` is
-# listed below purely as a safety net for that bare-deploy fallback case.
+# If you do repoint it: robots.txt and sitemap.xml must NOT be listed here —
+# they only work if crawlers can fetch them. Same for _headers, which has to
+# reach Cloudflare's asset storage for its per-path rules to apply at all
+# (Cloudflare reads it as config, then 404s the path itself).
 wrangler.jsonc
 serve.py
 package.json

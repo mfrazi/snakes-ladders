@@ -193,11 +193,28 @@ into `innerHTML` would be an XSS hole with an API key sitting next to it.
 
 ## Build and deploy
 
-`npm run deploy` runs `scripts/build.js`, which minifies `script.js`,
-`data.js`, `sw.js` and `style.css` with terser and clean-css into `dist/` —
-everything else copied byte-for-byte — then deploys `dist/` with
-`wrangler deploy --assets=dist`. Editing and local preview never touch `dist/`
-or run the minifier.
+`scripts/build.js` minifies `script.js`, `data.js`, `sw.js` and `style.css`
+with terser and clean-css into `dist/`, copying everything else byte-for-byte.
+`COPY_VERBATIM` in that file is the allowlist of what ships unprocessed — add
+new static files there or they won't be deployed at all.
+
+**`wrangler.jsonc`'s `assets.directory` must stay `./dist`.** It was `"."`
+once, with the minified path supplied as `--assets=dist` on the command line
+from `npm run deploy`. That works only for someone deploying by hand.
+Cloudflare's own builds run the configured build command and then a plain
+`wrangler deploy`, which reads `wrangler.jsonc`, saw `"."`, and shipped the
+raw commented source while discarding the `dist/` it had just built — live
+`script.js` was 89KB of unminified source, with nothing failing to signal it.
+Keeping the path in the config means every deploy route agrees; don't move it
+back to a command-line flag.
+
+The cost is that `dist/` must exist before any deploy or Workers preview,
+which is why `npm run dev` builds first. `npm start` (serve.py) is untouched
+and still serves plain source — that's the everyday loop.
+
+**Sanity-check a deploy by asking the live site, not by trusting the build
+log:** `curl -s https://<domain>/script.js | head -c 80` should be minified,
+and should not contain comments.
 
 **`data.js` needs `toplevel: false`.** Mangling top-level names would rename
 `BOARD_THEMES` in `data.js` while `script.js` kept asking for that literal

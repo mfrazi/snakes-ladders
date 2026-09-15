@@ -5,9 +5,9 @@
   "description": "A Snakes & Ladders game for couples or friends where every square starts a conversation — plain HTML/CSS/JS, deployable as a static site.",
   "scripts": {
     "start": "python3 serve.py",
-    "dev": "wrangler dev",
+    "dev": "npm run build && wrangler dev",
     "build": "node scripts/build.js",
-    "deploy": "npm run build && wrangler deploy --assets=dist"
+    "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
     "clean-css": "^5.3.3",

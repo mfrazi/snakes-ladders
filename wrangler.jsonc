@@ -2,23 +2,30 @@
 // assets Worker: no custom fetch handler. Every request is served straight
 // from Cloudflare's asset storage.
 //
-// The "directory" below (used by `wrangler dev` and by a bare `wrangler
-// deploy`) is the plain, unminified repo root — no build step to run this
-// locally. The real deploy path overrides it: `npm run deploy` runs
-// scripts/build.js first and calls `wrangler deploy --assets=dist` instead,
-// so what's actually served is the minified build. See "Build and deploy" in
-// AGENTS.md for why that lives entirely outside this file rather than as a
-// "main" Worker script.
+// "directory" is dist/ — the minified build — and NOT the repo root. This is
+// load-bearing, not a preference. It used to be "." with the real deploy path
+// passing --assets=dist on the command line instead, which worked only for
+// someone running `npm run deploy` by hand. Cloudflare's own builds don't run
+// that script: they run the configured build command and then a plain
+// `wrangler deploy`, which reads this file, saw ".", and shipped the raw
+// unminified source while throwing away the dist/ the build had just made.
+// Deployed script.js was 89KB of commented source for months as a result.
+// Keeping the path here means every deploy route agrees.
 //
-//   npm run deploy     -> npm run build && wrangler deploy --assets=dist
-//   npm run dev        -> wrangler dev (local, no login needed, no build)
+// The cost is that dist/ must exist before deploy or preview, which is why
+// `npm run dev` builds first. `npm start` (serve.py) is untouched and still
+// serves plain source for everyday work.
+//
+//   npm run deploy     -> npm run build && wrangler deploy
+//   npm run dev        -> npm run build && wrangler dev
+//   npm start          -> serve.py, plain unminified source
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "snakes-ladders",
   "compatibility_date": "2026-09-13",
 
   "assets": {
-    "directory": ".",
+    "directory": "./dist",
 
     // No "binding" here — that's only valid when a Worker script (a "main")
     // actually reads it via env.ASSETS.fetch(). This is a pure assets-only

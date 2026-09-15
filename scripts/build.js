@@ -2,14 +2,16 @@
 /**
  * Deploy-time-only minification. Source files are never touched — this
  * reads them, minifies script.js/data.js/sw.js/style.css, and writes a
- * clean dist/ containing exactly what ships, so `wrangler deploy` can
- * point --assets at dist/ instead of the repo root. Everything else
- * (index.html, manifest.json, robots.txt, sitemap.xml, _headers, assets/,
- * icons/) is copied through byte-for-byte; only these four files change.
+ * clean dist/ containing exactly what ships. wrangler.jsonc's
+ * assets.directory points at dist/, so this has to have run before any
+ * deploy or Workers preview. Everything else (index.html, manifest.json,
+ * robots.txt, sitemap.xml, _headers, assets/, icons/) is copied through
+ * byte-for-byte; only these four files change.
  *
- * Local dev (`npm start` / `npm run dev`) never runs this and never reads
- * from dist/ — both still serve the real, unminified source directly, so
- * editing and debugging this project stays exactly as it always was.
+ * `npm start` (serve.py) never runs this and serves the real, unminified
+ * source straight from the repo root — that's the everyday editing loop.
+ * `npm run dev` does build first, because it runs the actual Workers
+ * runtime and should therefore exercise exactly what gets deployed.
  *
  * data.js is a special case. It has NO module system and NO wrapping
  * IIFE — its top-level `const BOARD_THEMES = ...` etc. are real globals
@@ -57,7 +59,7 @@ async function main() {
   await minifyJsFile('sw.js', { toplevel: false });
   minifyCssFile('style.css');
 
-  console.log('\nBuilt dist/ — deploy it with: wrangler deploy --assets=dist');
+  console.log('\nBuilt dist/ — wrangler.jsonc points assets.directory here, so `wrangler deploy` ships it.');
 }
 
 async function minifyJsFile(name, mangle) {
