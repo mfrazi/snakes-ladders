@@ -95,7 +95,18 @@
 }
 
 html,
-body {
+body,
+/* <main> sits between body and #setup-screen/#game-screen (added for the
+   main-landmark accessibility fix), and needs the exact same rule they were
+   both already relying on — otherwise it defaults to auto/content height,
+   and #setup-screen's own `height: 100%` resolves against THAT instead of
+   the real viewport. On any screen where content is taller than the
+   viewport (a phone, mostly), the result is silent, wrong growth instead of
+   the intended internal scroll: confirmed live by watching #setup-screen
+   compute to 804px on a 568px-tall viewport — max-height:100% didn't even
+   cap it, because "100%" itself was resolving against main's inflated
+   auto-height, not the viewport. */
+main {
   height: 100%;
 }
 
@@ -294,7 +305,10 @@ button {
   padding: 8px 10px;
   border-radius: var(--r-sm);
   border: 1px solid transparent;
-  font-size: 14.5px;
+  /* 16px, not smaller — iOS Safari auto-zooms the whole page on focus for
+     any input under 16px, which no amount of desktop-emulator testing shows
+     (it's a Safari-specific quirk, invisible in Chrome DevTools). */
+  font-size: 16px;
   font-family: inherit;
   background: transparent;
   color: inherit;
@@ -612,12 +626,23 @@ button {
   justify-content: space-between;
   gap: 10px;
   flex: 0 0 auto;
+  /* Unconditional, not a narrow-viewport special case: a short landscape
+     phone (e.g. 926x428) is just as tight on width as a narrow portrait one
+     is, and a fixed max-width breakpoint can't see that — it only reads
+     width, and a landscape phone easily clears any reasonable px cutoff
+     while still not having room for 6 player names plus 5 icon buttons on
+     one line. Wrapping based on actual available space, not a guessed
+     breakpoint, covers both. Harmless when there IS room: flex-wrap only
+     wraps once a row's content actually exceeds its width. */
+  flex-wrap: wrap;
 }
 
 .scores {
   display: flex;
   gap: 7px;
   min-width: 0;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
 }
 
 .score-card {
@@ -661,7 +686,7 @@ button {
 
 .score-name {
   font-weight: 600;
-  max-width: 84px;
+  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -695,6 +720,7 @@ button {
 .header-tools {
   display: flex;
   gap: 6px;
+  margin-left: auto;
 }
 
 /* Floating "+3" that rises off the score card when points land, so a score
@@ -1411,7 +1437,11 @@ button {
   padding: 11px 13px;
   border-radius: var(--r-md);
   border: 1px solid var(--line);
-  font-size: 14px;
+  /* 16px, not smaller — this class is also the AI key/model text inputs,
+     and iOS Safari auto-zooms the whole page on focus for any input under
+     16px. Invisible in desktop-browser testing; only shows up on a real
+     iPhone. */
+  font-size: 16px;
   font-family: inherit;
   color: inherit;
   background: var(--panel-2);
@@ -1684,26 +1714,13 @@ button {
   .setup-card {
     padding: 22px 18px 18px;
   }
-  /* Four tool buttons and two score cards on a 375px row left about 18px for a
-     name, which truncated "Player 1" to "P.". A phone has vertical room to
-     spare around a square board, so the scores take a row of their own and
-     keep their names instead. */
-  .game-header {
-    flex-wrap: wrap;
-  }
-  .scores {
-    flex: 1 1 100%;
-    flex-wrap: wrap;
-  }
-  .header-tools {
-    margin-left: auto;
-  }
+  /* The header-wrap and score-name width fixes now live as base rules (not
+     here) — a landscape phone is just as tight on width as a narrow
+     portrait one, and a fixed breakpoint can't see that. See .game-header's
+     own comment. */
   .score-card {
     padding: 5px 10px 5px 12px;
     gap: 6px;
-  }
-  .score-name {
-    max-width: 120px;
   }
   .icon-btn {
     width: 33px;
