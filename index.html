@@ -203,6 +203,15 @@
 <div id="scene-photo" class="scene-photo"></div>
 <div id="scene-texture" class="scene-texture"></div>
 
+<!--
+  The two screens below are the app's actual content — everything else
+  (the animated background layers above, and every modal/overlay/drawer
+  below) is either decoration or a transient dialog, correctly outside a
+  main landmark. Only one of these two <section>s is ever visible; <main>
+  wraps both since together they ARE "the app" for screen-reader navigation
+  purposes, whichever one is showing.
+-->
+<main>
 <!-- SETUP -->
 <section id="setup-screen" class="screen">
   <div class="setup-card">
@@ -306,6 +315,7 @@
     </button>
   </div>
 </section>
+</main>
 
 <!-- FULLSCREEN DICE -->
 <div id="dice-overlay" class="dice-overlay hidden">

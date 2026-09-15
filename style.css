@@ -38,7 +38,16 @@
      the only saturated colour in the chrome. */
   --ink: #241f26;
   --ink-soft: #6d6570;
-  --ink-faint: #9c959f;
+  /* Was #9c959f — 2.9:1 on white, 2.7:1 on --panel-2, both well under the
+     4.5:1 WCAG AA floor for normal text (an axe/Lighthouse audit caught
+     this on every use: field labels, hints, the scene label). This value
+     is the lightest gray in the same hue family that still clears 4.5:1
+     on both backgrounds, computed against real WCAG relative-luminance
+     math, not eyeballed: 5.2:1 on white, 4.8:1 on --panel-2. It ends up
+     close to --ink-soft — there isn't much room for a third, visibly
+     lighter tier that also passes AA against an off-white background —
+     but a real gap: --ink-faint is still uniformly lighter across R/G/B. */
+  --ink-faint: #706b72;
 
   --panel: #ffffff;
   --panel-2: #f7f5f7;
@@ -428,7 +437,15 @@ button {
 
 .theme-chip.selected {
   border-color: color-mix(in srgb, var(--chip-color) 45%, transparent);
-  color: color-mix(in srgb, var(--chip-color) 72%, #000);
+  /* 62%, not 72% — this formula runs against all 12 theme colours (see
+     QUESTION_THEMES in data.js), and at 72% the lightest of them, Fun &
+     Dare's orange, computed to 4.43:1 against its own background: just
+     under the 4.5:1 AA floor (flagged by an audit; verified for real
+     against WCAG contrast math, not eyeballed). 62% clears every theme
+     colour with real margin — orange worst-case at 5.56:1, the rest
+     6.4-8.5:1 — and each text colour is still clearly tinted by its own
+     theme colour, not washed toward black. */
+  color: color-mix(in srgb, var(--chip-color) 62%, #000);
   background: color-mix(in srgb, var(--chip-color) 10%, #fff);
 }
 
