@@ -672,26 +672,23 @@ button {
 
 .game-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
   flex: 0 0 auto;
-  /* Unconditional, not a narrow-viewport special case: a short landscape
-     phone (e.g. 926x428) is just as tight on width as a narrow portrait one
-     is, and a fixed max-width breakpoint can't see that — it only reads
-     width, and a landscape phone easily clears any reasonable px cutoff
-     while still not having room for 6 player names plus 5 icon buttons on
-     one line. Wrapping based on actual available space, not a guessed
-     breakpoint, covers both. Harmless when there IS room: flex-wrap only
-     wraps once a row's content actually exceeds its width. */
-  flex-wrap: wrap;
+  /* Tools and players are two distinct rows, always — not a narrow-viewport
+     special case. The action row (sound/history/AI/restart/github) comes
+     first, pinned top-left; the player list is a full-width row underneath
+     it, so the two groups never compete for the same line and never
+     interleave, whether there are 2 players or 6. */
+  flex-direction: column;
 }
 
 .scores {
   display: flex;
   gap: 7px;
   min-width: 0;
-  flex: 1 1 100%;
+  width: 100%;
   flex-wrap: wrap;
 }
 
@@ -770,7 +767,6 @@ button {
 .header-tools {
   display: flex;
   gap: 6px;
-  margin-left: auto;
 }
 
 /* Floating "+3" that rises off the score card when points land, so a score
@@ -792,6 +788,7 @@ button {
 /* ---------- Board ---------- */
 
 .board-wrap {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -801,8 +798,29 @@ button {
   perspective-origin: 50% 40%;
 }
 
+/* A soft pool of themed light under the board, so it reads as sitting on a
+   lit surface rather than pasted flat onto the page texture behind it.
+   Centred with explicit offsets rather than relying on the flex container's
+   centering — an absolutely positioned pseudo-element opts out of flex
+   layout, so align/justify-content on .board-wrap don't reach it. */
+.board-wrap::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(90vw, 72vh);
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--rose) 22%, transparent) 0%, transparent 72%);
+  filter: blur(6px);
+  pointer-events: none;
+  z-index: 0;
+}
+
 .board {
   position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(10, 1fr);
   grid-template-rows: repeat(10, 1fr);
@@ -812,11 +830,17 @@ button {
   max-width: 100%;
   max-height: 100%;
   background: var(--board-bg);
-  border: 7px solid var(--board-frame);
-  border-radius: 18px;
+  border: 8px solid var(--board-frame);
+  border-radius: 20px;
   transform: rotateX(var(--tilt));
   transform-style: preserve-3d;
-  box-shadow: var(--board-edge);
+  /* The stacked physical-depth shadows come from --board-edge (per-theme, set
+     in applyBoardTheme); the two inset rings here are static and themed only
+     through var(--rose) — a fine accent hairline just inside the frame, and
+     a soft white mat between it and the cells, like a gallery frame around
+     the scene rather than a bare rectangle of cells. */
+  box-shadow: var(--board-edge), inset 0 0 0 1.5px color-mix(in srgb, var(--rose) 45%, transparent),
+    inset 0 0 0 4px rgba(255, 255, 255, 0.55);
 }
 
 .board.dealing {
@@ -836,7 +860,7 @@ button {
   inset: 0;
   pointer-events: none;
   z-index: 4;
-  border-radius: 11px;
+  border-radius: 13px;
   background: linear-gradient(158deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.05) 34%, transparent 55%);
 }
 
@@ -863,6 +887,56 @@ button {
   color: var(--cell-ink);
   opacity: 0.65;
   font-variant-numeric: tabular-nums;
+}
+
+/* The four outer corners of the grid (1, 10, 91, 100) get a small themed
+   medallion behind their number — a quiet "this board has corners on
+   purpose" detail rather than four cells that just happen to be corners. */
+.cell.corner-cell::before {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 62%;
+  height: 62%;
+  min-width: 12px;
+  min-height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--rose) 30%, transparent) 0%, transparent 75%);
+  z-index: 1;
+}
+
+/* Small themed ornaments — one of the scene's own motifs (a heart, a leaf, a
+   star…) scattered onto a handful of otherwise-empty cells each new board,
+   away from ladders and snakes and tucked into the cell's spare corner so
+   the number stays readable. Decoration only: never on a cell a rule cares
+   about. */
+.cell-ornament {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  z-index: 1;
+  font-size: clamp(7px, 1.9vw, 14px);
+  line-height: 1;
+  opacity: 0.5;
+  transform: rotate(var(--orn-rot, 0deg));
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Start and finish get their own small flag rather than sharing the plain
+   ornament styling — they mark the one cell that actually means something,
+   not just texture. */
+.cell-flag {
+  position: absolute;
+  right: 1px;
+  bottom: -1px;
+  z-index: 2;
+  font-size: clamp(9px, 2.6vw, 17px);
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+  pointer-events: none;
+  user-select: none;
 }
 
 /* Each cell fades in on its own beat when a board is generated — the board

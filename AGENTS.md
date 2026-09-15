@@ -112,8 +112,8 @@ players, "you" and "I" don't identify anyone:
 1. **Every prompt names its audience** ("write this for Priya, address Priya as
    you"), and when weaving in someone else's answer it names that person too.
 2. **Personalization stays with the same person.** It draws only on *your* past
-   answers, unless someone else's answer actually named you. A background
-   follow-up is reserved for the person it's about, held until their next turn.
+   answers, unless someone else's answer actually named you. Every question is
+   still one standalone line, never a follow-up chained onto a prior answer.
 
 Any API failure falls back to the static bank and is logged to the history
 drawer rather than interrupting play.

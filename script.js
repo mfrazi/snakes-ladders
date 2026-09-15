@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-15h';
+  const BUILD = '2026-09-15i';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -219,7 +219,6 @@
       usedQuestions,
       usedSurprises: [],
       answers: [],
-      aiQuestions: [],
       log: [],
       lastRoll: 1,
     };
@@ -781,6 +780,8 @@
       cellEls[num] = cell;
     });
 
+    decorateBoard(boardTheme());
+
     const clip = document.createElement('div');
     clip.className = 'board-texture-clip';
     const boardPhoto = document.createElement('div');
@@ -798,6 +799,59 @@
     replayAnimation(board, 'dealing');
     clearTimeout(dealTimer);
     dealTimer = setTimeout(() => board.classList.remove('dealing'), 1100);
+  }
+
+  // Purely cosmetic dressing on top of the plain numbered grid: a medallion
+  // behind the four outer corners, a start/finish flag on 1 and 100, and a
+  // sprinkle of the scene's own motifs (a heart, a leaf, a star…) on a
+  // handful of otherwise-empty cells. Placement is derived from this board's
+  // own ladder/snake layout rather than Math.random(), so reloading the same
+  // saved game shows the same decoration instead of it reshuffling on you —
+  // and it never lands on a cell a game rule actually cares about.
+  function decorateBoard(theme) {
+    const taken = new Set([1, 100]);
+    Object.entries(state.ladders).forEach(([from, to]) => {
+      taken.add(Number(from));
+      taken.add(Number(to));
+    });
+    Object.entries(state.snakes).forEach(([from, to]) => {
+      taken.add(Number(from));
+      taken.add(Number(to));
+    });
+
+    [1, 10, 91, 100].forEach((num) => {
+      const cell = cellEls[num];
+      if (cell) cell.classList.add('corner-cell');
+    });
+
+    const flag = (num, icon) => {
+      const cell = cellEls[num];
+      if (!cell || !icon) return;
+      const span = document.createElement('span');
+      span.className = 'cell-flag';
+      span.textContent = icon;
+      cell.appendChild(span);
+    };
+    flag(1, theme.startIcon);
+    flag(100, theme.finishIcon);
+
+    const ornaments = theme.ornaments;
+    if (!ornaments || !ornaments.length) return;
+
+    const free = CELL_ORDER.filter((num) => !taken.has(num));
+    const stride = Math.max(3, Math.floor(free.length / 9));
+    let placed = 0;
+    for (let i = 0; i < free.length && placed < 8; i += stride) {
+      const num = free[i];
+      const cell = cellEls[num];
+      if (!cell) continue;
+      const span = document.createElement('span');
+      span.className = 'cell-ornament';
+      span.textContent = ornaments[placed % ornaments.length];
+      span.style.setProperty('--orn-rot', `${((num * 37) % 40) - 20}deg`);
+      cell.appendChild(span);
+      placed++;
+    }
   }
 
   function svgEl(tag, attrs) {
@@ -1592,23 +1646,6 @@
       const canPersonalize = writtenAnswers().length > 0;
       const wantPersonalized = canPersonalize && Math.random() < AI_PERSONALIZE_CHANCE;
 
-      // A background follow-up is reserved for the player it was actually
-      // written for (see requestFollowUps) — normally whoever gave the
-      // original answer, or whoever they named instead. It only fires on
-      // THAT player's own turn, however many turns that takes, rather than
-      // being handed to whoever happens to land on a question tile next.
-      // (`target == null` covers a queue item saved before this existed —
-      // those have no owner recorded, so any player can claim one.)
-      const queuedIndex = state.aiQuestions.findIndex(
-        (q) => q.target == null || q.target === currentName
-      );
-      if (wantPersonalized && queuedIndex !== -1) {
-        const [queued] = state.aiQuestions.splice(queuedIndex, 1);
-        applyQuestion(queued.question, queued.theme, true);
-        saveState();
-        return;
-      }
-
       const themeKey = state.themes[Math.floor(Math.random() * state.themes.length)];
 
       if (aiReady()) {
@@ -1654,7 +1691,6 @@
     if (answered) {
       player.love += 3;
       logMessage(`💗 ${player.name} +3`);
-      if (answer) requestFollowUps();
     } else {
       logMessage(`⏭️ ${player.name} skipped`);
     }
@@ -1981,28 +2017,21 @@
   // being told not to ("What's your favorite trip? Also, where next?"). This
   // guarantees only the first one ever reaches the screen, even when the
   // prompt gets ignored — it's the mechanical backstop, not the primary fix
-  // (that's the wording in buildLiveQuestionPrompt/buildFollowUpPrompt below).
-  // Dare lines have no "?" at all, so they pass through untouched.
+  // (that's the wording in buildLiveQuestionPrompt below). Every question the
+  // game shows is meant to stand alone, with nothing chained after it — dare
+  // lines have no "?" at all, so they pass through untouched.
   function firstQuestionOnly(line) {
     const firstMark = line.indexOf('?');
     if (firstMark === -1 || firstMark === line.length - 1) return line;
     return line.slice(0, firstMark + 1);
   }
 
-  function parseQuestions(raw) {
-    return raw
-      .split('\n')
-      .map((line) => firstQuestionOnly(line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim()))
-      .filter((line) => line.length > 8 && line.length < 220 && line.includes('?'))
-      .slice(0, 3);
-  }
-
   // For a single-line reply. Dare-theme lines are instructions, not
-  // questions, so this — unlike parseQuestions — can't require a "?" outright.
-  // Instead: prefer whichever line HAS one (real content, not a "Sure, here
-  // you go:" preamble the model added despite instructions); with no "?"
-  // anywhere (a dare), fall back to the longest line, since a stray preamble
-  // is reliably shorter than the actual instruction.
+  // questions, so this can't require a "?" outright. Instead: prefer
+  // whichever line HAS one (real content, not a "Sure, here you go:"
+  // preamble the model added despite instructions); with no "?" anywhere (a
+  // dare), fall back to the longest line, since a stray preamble is reliably
+  // shorter than the actual instruction.
   function parseSingleLine(raw) {
     const stripQuotes = (s) => s.replace(/^["'“‘]+/, '').replace(/["'”’]+$/, '');
     const lines = raw
@@ -2016,10 +2045,11 @@
 
   const writtenAnswers = () => state.answers.filter((entry) => entry.answer);
 
-  // Whole-word, case-insensitive: does this text name this player? Used to
-  // decide whether a follow-up stays with whoever answered, or crosses over
-  // to whoever they actually brought up. Regex-escaped since a name is free
-  // text a player typed in on setup, not a pattern.
+  // Whole-word, case-insensitive: does this text name this player? Used by
+  // personalization to decide whether a fresh question should stay scoped to
+  // whoever answered, or cross over to whoever they actually brought up.
+  // Regex-escaped since a name is free text a player typed in on setup, not
+  // a pattern.
   function mentionsPlayer(text, name) {
     const trimmed = (name || '').trim();
     if (!text || !trimmed) return false;
@@ -2084,115 +2114,6 @@
     ]
       .filter(Boolean)
       .join('\n');
-  }
-
-  // `target` is who will actually be asked these — the source answerer by
-  // default, or whoever they named instead (decided by the caller before
-  // this runs). `sourcePlayer` is who really said the thing being built on,
-  // which only differs from `target` in that mention case — that's exactly
-  // when a model is most likely to blur "I"/"you" between the wrong two
-  // people, so it's spelled out explicitly rather than left implicit.
-  // `entries` is the scoped slice of writtenAnswers() this may draw on —
-  // never a third player's unrelated answer; see requestFollowUps for how
-  // that scope is decided.
-  function buildFollowUpPrompt(target, sourcePlayer, entries) {
-    const mode = MODES[activeMode()] || MODES.couples;
-    const transcript = entries
-      .map((entry) => `${entry.player} was asked "${entry.question}" and answered: "${entry.answer}"`)
-      .join('\n');
-
-    const identity =
-      sourcePlayer === target
-        ? `Write these for ${target} to answer next. Address ${target} as "you" — ${target} is the one who said this, so "you" refers to them throughout.`
-        : `Write these for ${target} to answer next, even though ${sourcePlayer} is the one who said this below. ` +
-          `Address ${target} as "you". Refer to ${sourcePlayer} by name, never as "I" or "you" — ${sourcePlayer} is not who this is being written for.`;
-
-    // Built in two pieces rather than one filtered array: the blank lines here
-    // are deliberate paragraph breaks around the transcript, so a blanket
-    // .filter(Boolean) to drop the empty Couples-mode guard would eat them too.
-    const preamble = [mode.subject, mode.guard].filter(Boolean);
-
-    return preamble
-      .concat([
-        'Here is what they just shared with each other:',
-        '',
-        transcript,
-        '',
-        `Write 2 new follow-up questions that build directly on what's above. ${identity}`,
-        'Rules: one question per line, and each line asks ONE thing only — never chain two ' +
-          'questions with "and", "or", a comma, or a second question mark. No numbering, no ' +
-          'preamble, no commentary.',
-        'Each question must be under 18 words, plain language, specific to their answers, and answerable out loud.',
-      ])
-      .join('\n');
-  }
-
-  let followUpInFlight = false;
-
-  // Fire-and-forget: this runs in the background after the question modal has
-  // already closed, so its outcome is reported through the game log (visible
-  // any time in the 📜 drawer) rather than a status line inside a modal that's
-  // gone by the time this resolves.
-  async function requestFollowUps() {
-    if (!aiReady() || followUpInFlight || writtenAnswers().length === 0) return;
-    followUpInFlight = true;
-
-    try {
-      const written = writtenAnswers();
-      const last = written[written.length - 1];
-
-      // Stays with whoever just answered by default — the question thread
-      // continues with the same person rather than jumping to whoever's
-      // turn happens to come up next. Unless their own answer named someone
-      // else at the table, in which case that's who the follow-up is
-      // actually about, and who it's held for instead.
-      const mentioned = state.players.find(
-        (p) => p.name !== last.player && mentionsPlayer(last.answer, p.name)
-      );
-      const target = mentioned ? mentioned.name : last.player;
-
-      // What the follow-up is allowed to draw on — decided BEFORE the model
-      // ever sees a prompt, not after. Always the answer that just triggered
-      // this. Enriched with the same person's own earlier answers only when
-      // nobody else was named: a mention means this is specifically about
-      // what was said regarding that other player, not a general
-      // continuation of the answerer's own theme, so it stays scoped to
-      // just that one answer. Either way, a third player's unrelated answer
-      // never enters the picture — this is the actual fix for "don't ask
-      // player A's answer to another player unless A named them": the old
-      // code drew its transcript from the last 4 answers from ANYONE, and
-      // only decided who to route the result to afterward, so a follow-up
-      // could already be contaminated with someone else's unrelated answer
-      // before targeting ever got a say.
-      const entries = mentioned
-        ? [last]
-        : [last, ...written.filter((e) => e.player === last.player && e !== last).slice(-2)];
-
-      const raw = await callLLM(buildFollowUpPrompt(target, last.player, entries));
-      const questions = parseQuestions(raw);
-      if (questions.length) {
-        const theme = last.theme;
-
-        // Prepended, not appended — so the very next question tile the
-        // target player lands on uses this fresh, on-topic follow-up, not
-        // whatever was already queued from an earlier exchange.
-        state.aiQuestions = [
-          ...questions.map((question) => ({ question, theme, target })),
-          ...state.aiQuestions,
-        ];
-        // Kept modest — the queue is no longer drained every turn (see
-        // drawQuestion), so a large cap would let stale, recency-biased
-        // items linger indefinitely.
-        if (state.aiQuestions.length > 6) state.aiQuestions.length = 6;
-        logMessage(`✨ ${questions.length} personal question${questions.length > 1 ? 's' : ''} ready for ${target}`);
-        saveState();
-      }
-    } catch (error) {
-      logMessage(`✨ AI unavailable: ${error.message}`);
-      saveState();
-    } finally {
-      followUpInFlight = false;
-    }
   }
 
   // ---------- AI settings ----------
