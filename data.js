@@ -14,6 +14,7 @@ const BOARD_THEMES = {
   romance: {
     label: 'Romance',
     page: 'radial-gradient(1100px 620px at 50% -12%, #fff7f4 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #ecdfff 0%, transparent 58%), linear-gradient(160deg, #fdeef1 0%, #f5e8f7 52%, #ffeef0 100%)',
+    pageBase: '#f5e8f7',
     boardBg: 'linear-gradient(155deg, #fffdf9, #fdf1ea)',
     frame: '#ffffff',
     cell: 'linear-gradient(160deg, #fffdfa, #fff8f3)',
@@ -42,6 +43,7 @@ const BOARD_THEMES = {
   forest: {
     label: 'Forest',
     page: 'radial-gradient(1100px 620px at 50% -12%, #f0f8ea 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #cfe6d4 0%, transparent 58%), linear-gradient(160deg, #e4f1dc 0%, #d5e9d6 52%, #eaf5e2 100%)',
+    pageBase: '#d5e9d6',
     boardBg: 'linear-gradient(155deg, #fbfdf6, #e9f3e0)',
     frame: '#fbfdf7',
     cell: 'linear-gradient(160deg, #fbfdf6, #f2f9ea)',
@@ -70,6 +72,7 @@ const BOARD_THEMES = {
   ocean: {
     label: 'Ocean',
     page: 'radial-gradient(1100px 620px at 50% -12%, #eaf7fb 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #c9e2f2 0%, transparent 58%), linear-gradient(160deg, #ddeff7 0%, #cfe4f2 52%, #e8f5fb 100%)',
+    pageBase: '#cfe4f2',
     boardBg: 'linear-gradient(155deg, #f9fdff, #e2f0f9)',
     frame: '#f9fdff',
     cell: 'linear-gradient(160deg, #f9fdff, #eef8fd)',
@@ -98,6 +101,7 @@ const BOARD_THEMES = {
   meadow: {
     label: 'Meadow',
     page: 'radial-gradient(1100px 620px at 50% -12%, #f8fce9 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #e0eec4 0%, transparent 58%), linear-gradient(160deg, #eff8dd 0%, #e6f2d4 52%, #f7fbe8 100%)',
+    pageBase: '#e6f2d4',
     boardBg: 'linear-gradient(155deg, #fdfef7, #eef6dd)',
     frame: '#fdfef8',
     cell: 'linear-gradient(160deg, #fdfef7, #f6fbe8)',
@@ -126,6 +130,7 @@ const BOARD_THEMES = {
   sunset: {
     label: 'Sunset',
     page: 'radial-gradient(1100px 620px at 50% -12%, #fff3e4 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #f0d6ea 0%, transparent 58%), linear-gradient(160deg, #ffe9db 0%, #f8dde6 52%, #f4e2f2 100%)',
+    pageBase: '#f8dde6',
     boardBg: 'linear-gradient(155deg, #fffaf3, #fbe9db)',
     frame: '#fffaf4',
     cell: 'linear-gradient(160deg, #fffaf3, #fef2e7)',
@@ -154,6 +159,7 @@ const BOARD_THEMES = {
   night: {
     label: 'Night',
     page: 'radial-gradient(1100px 620px at 50% -12%, #333c63 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #3a2a5c 0%, transparent 58%), linear-gradient(160deg, #1e2438 0%, #262040 52%, #1a2032 100%)',
+    pageBase: '#262040',
     boardBg: 'linear-gradient(155deg, #303858, #242a44)',
     frame: '#3c4468',
     cell: 'linear-gradient(160deg, #333c5e, #2c3452)',

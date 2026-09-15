@@ -70,6 +70,10 @@
   --rose: #d6336c;
   --rose-deep: #a52551;
   --page-bg: linear-gradient(160deg, #fdeef1 0%, #f5e8f7 52%, #ffeef0 100%);
+  /* Flat tone under --page-bg's gradients, so nothing can fall through to
+     white. Repointed per scene by applyBoardTheme(); these are the Romance
+     defaults, matching the rest of this block. */
+  --page-base: #f5e8f7;
   --board-bg: linear-gradient(155deg, #fffdf9, #fdf1ea);
   --board-frame: #ffffff;
   --board-edge: 0 26px 30px rgba(120, 40, 80, 0.3);
@@ -122,8 +126,17 @@ body {
   font-family: var(--font);
   font-size: 14px;
   color: var(--ink);
-  background: var(--page-bg);
-  background-attachment: fixed;
+  /* --page-bg is gradients only, with no solid colour under them. A gradient
+     paints its own box and nothing beyond it, so any sliver the box doesn't
+     cover falls through to the canvas default: white. --page-base is the
+     scene's own flat tone behind them, so there is no "nothing" to reach.
+     background-attachment: fixed used to be here and was removed — body
+     never scrolls (overflow is hidden, and the screens scroll internally),
+     so it bought nothing, while pinning the painting area to the viewport is
+     exactly the arrangement iOS Safari mishandles when its address bar
+     collapses and the viewport grows mid-scroll. */
+  background-color: var(--page-base);
+  background-image: var(--page-bg);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   transition: background 0.5s ease;
@@ -206,11 +219,14 @@ button {
 
 #setup-screen {
   display: flex;
-  align-items: center;
+  /* NO align-items: center here — see .setup-card's margin: auto below. */
   justify-content: center;
   height: 100%;
   padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
   overflow-y: auto;
+  /* Stops an overscroll at either end from chaining to the document, which
+     is what rubber-bands a blank strip into view on iOS. */
+  overscroll-behavior: contain;
 }
 
 .setup-card {
@@ -220,6 +236,15 @@ button {
   padding: 26px 24px 22px;
   max-width: 430px;
   width: 100%;
+  /* Centres the card the way `align-items: center` on the parent used to,
+     but without that rule's failure mode: a flex item centred in a container
+     it's taller than overflows equally in BOTH directions, and the half that
+     lands above the scroll container's origin is unreachable — scrollTop
+     can't go negative. On a 664px-tall phone the 764px card had its heading
+     sitting 28px above the viewport with no way to scroll up to it.
+     An auto margin instead resolves to 0 once free space runs out, so the
+     card pins to the top and the whole of it stays scrollable. */
+  margin: auto;
   /* Left-aligned: a stack of centred labels is the thing that makes a form
      look like a template rather than a screen someone laid out. */
   text-align: left;

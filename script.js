@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-15e';
+  const BUILD = '2026-09-15f';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -356,6 +356,7 @@
     );
 
     root.setProperty('--page-bg', theme.page);
+    root.setProperty('--page-base', theme.pageBase);
     root.setProperty('--board-bg', theme.boardBg);
     root.setProperty('--board-frame', theme.frame);
     root.setProperty('--cell-bg', theme.cell);
