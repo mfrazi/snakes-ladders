@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-15f';
+  const BUILD = '2026-09-15g';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -74,7 +74,13 @@
   let aiConfig = null;
   let cellEls = {};
   let tokenEls = [];
+  // Two different questions, deliberately kept apart:
+  //   animating  — something is physically moving (dice, pawn). Drives visuals.
+  //   turnBusy   — this turn has begun and hasn't been handed over yet. Drives
+  //                input locking, and stays true across the quiet beat between
+  //                the pawn landing and the question appearing.
   let animating = false;
+  let turnBusy = false;
   let pendingSurprise = null;
   let currentQuestion = null;
   let diceSpins = 0;
@@ -1194,7 +1200,7 @@
     }
 
     const roll = $('roll-btn');
-    roll.disabled = state.finished || animating;
+    roll.disabled = state.finished || turnBusy || animating;
     roll.classList.toggle('ready', !roll.disabled && modalsClosed());
     placeTokens();
   }
@@ -1400,7 +1406,8 @@
 
   // ---------- Turn flow ----------
   async function rollDice() {
-    if (animating || state.finished || !modalsClosed()) return;
+    if (turnBusy || animating || state.finished || !modalsClosed()) return;
+    turnBusy = true;
     animating = true;
     renderAll();
 
@@ -1459,6 +1466,7 @@
     if (target > 100) {
       logMessage(`🎯 ${player.name} needs exactly ${100 - player.pos}`);
       animating = false;
+      turnBusy = false;
       saveState();
       renderAll();
       advanceTurn();
@@ -1471,12 +1479,20 @@
     renderAll();
 
     if (player.pos === 100) {
+      turnBusy = false;
       endGame(state.current);
       return;
     }
 
+    // turnBusy stays true across this pause. It is the whole reason the beat
+    // is safe: the pawn has stopped, so `animating` is already false, but no
+    // modal is up yet either — which used to leave ~900ms where both of
+    // rollDice()'s other guards were open and a second roll went straight
+    // through, moving the same player twice and skipping their question.
     await sleep(LANDING_PAUSE_MS);
     openTileContent();
+    // A modal is now up, so modalsClosed() takes over the lock from here.
+    turnBusy = false;
   }
 
   // Content is decided at landing time, so the board gives nothing away and
