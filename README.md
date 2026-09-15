@@ -249,6 +249,17 @@ someone else at the table, the follow-up is about them now, so it's held for
 turn actually uses it, or draws something fresh instead — reserved isn't the
 same as guaranteed.
 
+Two things the model is told explicitly, both aimed at the same failure
+mode: with 3+ players in the game, "you" and "I" alone don't say who they
+mean. So every prompt names its actual audience — "write this for Priya,
+address Priya as you" — and when it's weaving in something someone else
+said, it's told to name that person too, never "I" or "you" for them. And a
+follow-up's own source material is scoped just as tightly: it's built only
+from the one answer it's actually about (plus that same person's own recent
+history, when nobody else was named) — never diluted with an unrelated third
+player's answer that happened to be recent, which the model would have no
+reason not to use otherwise.
+
 Open **AI questions**, pick **Claude**, **OpenAI**, or **Gemini**, paste your
 own API key, and hit **Save & test**. From then on, landing on a question tile
 shows a brief pulsing "✨ …" while the model writes that turn's line (well

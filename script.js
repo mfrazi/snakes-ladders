@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-15';
+  const BUILD = '2026-09-15b';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -2046,13 +2046,17 @@
       mode.subject,
       // Empty in Couples mode, so .filter(Boolean) drops the line entirely.
       mode.guard,
-      `Write ONE new line for this game's "${themeLabel(themeKey)}" theme.`,
+      `Write ONE new line for this game's "${themeLabel(themeKey)}" theme, for ${forName} to answer. Address ${forName} as "you".`,
+      // The naming rule only matters once there's someone else in the prompt
+      // to get confused with — a fresh, standalone question never mentions
+      // anyone, so there's nothing for "I"/"you" to misattribute.
       context
-        ? `Something they said earlier this game — weave it in if it fits naturally:\n${context}`
+        ? `Something they said earlier this game — weave it in if it fits naturally. Use real names for ` +
+          `anyone besides ${forName} — never "I" or "you" for them, only for ${forName}:\n${context}`
         : "Write a fresh, standalone prompt for this theme. Don't reference or assume any prior answers.",
       usedBefore ? `Already used for this theme — do not repeat or closely rephrase: ${usedBefore}` : '',
       isDare
-        ? 'This theme is a short playful action for them to do together right now, not a question. One action only — never chain two actions with "and" or "then". Under 20 words.'
+        ? `This theme is a short playful action for ${forName} to do right now, not a question. One action only — never chain two actions with "and" or "then". Under 20 words.`
         : 'Ask ONE thing, in plain language, under 18 words. Never chain two questions together with "and", "or", a comma, or a second question mark — if you\'re tempted to ask two things, keep only the better one.',
       'Output ONLY that single line. No numbering, no quotes, no preamble, no commentary.',
     ]
@@ -2060,12 +2064,26 @@
       .join('\n');
   }
 
-  function buildFollowUpPrompt() {
+  // `target` is who will actually be asked these — the source answerer by
+  // default, or whoever they named instead (decided by the caller before
+  // this runs). `sourcePlayer` is who really said the thing being built on,
+  // which only differs from `target` in that mention case — that's exactly
+  // when a model is most likely to blur "I"/"you" between the wrong two
+  // people, so it's spelled out explicitly rather than left implicit.
+  // `entries` is the scoped slice of writtenAnswers() this may draw on —
+  // never a third player's unrelated answer; see requestFollowUps for how
+  // that scope is decided.
+  function buildFollowUpPrompt(target, sourcePlayer, entries) {
     const mode = MODES[activeMode()] || MODES.couples;
-    const transcript = writtenAnswers()
-      .slice(-4)
+    const transcript = entries
       .map((entry) => `${entry.player} was asked "${entry.question}" and answered: "${entry.answer}"`)
       .join('\n');
+
+    const identity =
+      sourcePlayer === target
+        ? `Write these for ${target} to answer next. Address ${target} as "you" — ${target} is the one who said this, so "you" refers to them throughout.`
+        : `Write these for ${target} to answer next, even though ${sourcePlayer} is the one who said this below. ` +
+          `Address ${target} as "you". Refer to ${sourcePlayer} by name, never as "I" or "you" — ${sourcePlayer} is not who this is being written for.`;
 
     // Built in two pieces rather than one filtered array: the blank lines here
     // are deliberate paragraph breaks around the transcript, so a blanket
@@ -2078,7 +2096,7 @@
         '',
         transcript,
         '',
-        'Write 2 new follow-up questions that build directly on what they said.',
+        `Write 2 new follow-up questions that build directly on what's above. ${identity}`,
         'Rules: one question per line, and each line asks ONE thing only — never chain two ' +
           'questions with "and", "or", a comma, or a second question mark. No numbering, no ' +
           'preamble, no commentary.',
@@ -2098,22 +2116,40 @@
     followUpInFlight = true;
 
     try {
-      const raw = await callLLM(buildFollowUpPrompt());
+      const written = writtenAnswers();
+      const last = written[written.length - 1];
+
+      // Stays with whoever just answered by default — the question thread
+      // continues with the same person rather than jumping to whoever's
+      // turn happens to come up next. Unless their own answer named someone
+      // else at the table, in which case that's who the follow-up is
+      // actually about, and who it's held for instead.
+      const mentioned = state.players.find(
+        (p) => p.name !== last.player && mentionsPlayer(last.answer, p.name)
+      );
+      const target = mentioned ? mentioned.name : last.player;
+
+      // What the follow-up is allowed to draw on — decided BEFORE the model
+      // ever sees a prompt, not after. Always the answer that just triggered
+      // this. Enriched with the same person's own earlier answers only when
+      // nobody else was named: a mention means this is specifically about
+      // what was said regarding that other player, not a general
+      // continuation of the answerer's own theme, so it stays scoped to
+      // just that one answer. Either way, a third player's unrelated answer
+      // never enters the picture — this is the actual fix for "don't ask
+      // player A's answer to another player unless A named them": the old
+      // code drew its transcript from the last 4 answers from ANYONE, and
+      // only decided who to route the result to afterward, so a follow-up
+      // could already be contaminated with someone else's unrelated answer
+      // before targeting ever got a say.
+      const entries = mentioned
+        ? [last]
+        : [last, ...written.filter((e) => e.player === last.player && e !== last).slice(-2)];
+
+      const raw = await callLLM(buildFollowUpPrompt(target, last.player, entries));
       const questions = parseQuestions(raw);
       if (questions.length) {
-        const written = writtenAnswers();
-        const last = written[written.length - 1];
         const theme = last.theme;
-
-        // Stays with whoever just answered by default — the question
-        // thread continues with the same person rather than jumping to
-        // whoever's turn happens to come up next. Unless their own answer
-        // named someone else at the table, in which case that's who the
-        // follow-up is actually about, and who it's held for instead.
-        const mentioned = state.players.find(
-          (p) => p.name !== last.player && mentionsPlayer(last.answer, p.name)
-        );
-        const target = mentioned ? mentioned.name : last.player;
 
         // Prepended, not appended — so the very next question tile the
         // target player lands on uses this fresh, on-topic follow-up, not
