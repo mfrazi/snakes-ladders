@@ -33,5 +33,20 @@
     // ("Cannot use assets with a binding in an assets-only Worker") if the
     // binding is present without one. Confirmed by actually running it, not
     // just by reading Cloudflare's docs.
+  },
+
+  // Declared here rather than left as a dashboard toggle, so every deploy —
+  // whoever runs it, from whichever machine — gets the same logging
+  // behavior instead of whatever an earlier session happened to click.
+  // "persist: false" means these stay real-time (wrangler tail / the Logs
+  // tab while live) rather than written to Cloudflare's observability
+  // platform for later querying — there's no server-side logic here to
+  // generate anything worth long-term retention, just static asset requests.
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": false
+    }
   }
 }
