@@ -15,6 +15,16 @@
 <link rel="stylesheet" href="style.css" />
 
 <!--
+  Preloaded ahead of the CSS discovering it: this is the weight the <h1>
+  below actually renders in (font-weight: 660 has no exact match among the
+  three self-hosted Inter files, and 660 lands closer to 700 than 600), and
+  that <h1> is the LCP element. font-display: swap already means nothing
+  BLOCKS on this — it's here purely so the LCP text doesn't visibly flash
+  from fallback to Inter a beat after first paint.
+-->
+<link rel="preload" href="assets/fonts/inter-700.woff2" as="font" type="font/woff2" crossorigin />
+
+<!--
   Both scripts are `defer`, and in <head> rather than at the end of <body>.
   They used to be plain synchronous tags before </body>, which an audit
   flagged as render-blocking at ~600ms each: the browser would not paint the

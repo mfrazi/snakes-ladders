@@ -23,6 +23,37 @@
    controls: player faces, topic tags, surprise cards.
    ============================================================ */
 
+/* Inter, self-hosted (SIL OFL 1.1) rather than linked from Google Fonts —
+   the CSP here is same-origin only (no fonts.googleapis.com in font-src),
+   and self-hosting also means the three weights this app actually uses are
+   in the service worker's own precache, so the right typeface still shows
+   up offline. Only static 400/600/700 instances: the CSS elsewhere asks for
+   in-between weights too (550/640/650/660), which is fine — the browser's
+   normal weight-matching snaps each to its nearest sibling here, same as it
+   already had to for the old Segoe UI Variable Text stack on browsers that
+   don't support variable fonts. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('assets/fonts/inter-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('assets/fonts/inter-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('assets/fonts/inter-700.woff2') format('woff2');
+}
+
 :root {
   color-scheme: light;
   --tilt: 16deg;
@@ -30,9 +61,11 @@
   --step-ms: 320ms;
   --travel-ms: 1200ms;
 
-  /* Type */
-  --font: system-ui, -apple-system, 'Segoe UI Variable Text', 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  /* Type — Inter first (self-hosted above), Roboto next since it already
+     ships on Android/ChromeOS and matches Inter's proportions closely,
+     then the system stack as a last resort before generic sans-serif. */
+  --font: 'Inter', Roboto, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial,
+    sans-serif;
 
   /* Neutral ink. Near-grey on purpose: the scene accent should be
      the only saturated colour in the chrome. */
@@ -767,6 +800,10 @@ button {
 .header-tools {
   display: flex;
   gap: 6px;
+  /* .game-header is a column now (tools row, then the player row below it);
+     align-items: flex-start on it left-aligns both rows by default, so this
+     opts the tools row alone back to the right edge. */
+  align-self: flex-end;
 }
 
 /* Floating "+3" that rises off the score card when points land, so a score
@@ -796,6 +833,15 @@ button {
   justify-content: center;
   perspective: 1500px;
   perspective-origin: 50% 40%;
+  /* rotateX(--tilt) tilts the board's near (bottom) edge toward the viewer,
+     which — under perspective — projects it visually past its own flat
+     layout box, and the stacked drop shadows in --board-edge reach further
+     still. Neither shows up in the board's own box size, so on a wide
+     desktop viewport (where the board grows large enough for that overhang
+     to be sizeable) it was visually landing on top of the dock below,
+     button and all. This reserved strip is dead space the board centers
+     above, sized to clear both effects at the desktop tilt angle. */
+  padding-bottom: 64px;
 }
 
 /* A soft pool of themed light under the board, so it reads as sitting on a
@@ -889,36 +935,19 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* The four outer corners of the grid (1, 10, 91, 100) get a small themed
-   medallion behind their number — a quiet "this board has corners on
-   purpose" detail rather than four cells that just happen to be corners. */
-.cell.corner-cell::before {
-  content: '';
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 62%;
-  height: 62%;
-  min-width: 12px;
-  min-height: 12px;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--rose) 30%, transparent) 0%, transparent 75%);
-  z-index: 1;
-}
-
 /* Small themed ornaments — one of the scene's own motifs (a heart, a leaf, a
    star…) scattered onto a handful of otherwise-empty cells each new board,
    away from ladders and snakes and tucked into the cell's spare corner so
-   the number stays readable. Decoration only: never on a cell a rule cares
-   about. */
+   the number stays readable. Kept faint and small — at this size a busy
+   emoji reads as fine texture, not a round blob sitting on the board. */
 .cell-ornament {
   position: absolute;
   right: 1px;
   bottom: 0;
   z-index: 1;
-  font-size: clamp(7px, 1.9vw, 14px);
+  font-size: clamp(6px, 1.4vw, 11px);
   line-height: 1;
-  opacity: 0.5;
+  opacity: 0.32;
   transform: rotate(var(--orn-rot, 0deg));
   pointer-events: none;
   user-select: none;
@@ -1855,6 +1884,12 @@ button {
   .board {
     width: min(98vw, 66vh);
     border-width: 5px;
+  }
+  .board-wrap {
+    /* Same overhang problem as the desktop rule, but a shallower tilt and a
+       smaller board shrink the tilt side of it — only the shadow's reach is
+       unchanged, so this needs less reserved clearance, not none. */
+    padding-bottom: 32px;
   }
   #game-screen {
     padding: max(8px, env(safe-area-inset-top)) 8px max(10px, env(safe-area-inset-bottom));

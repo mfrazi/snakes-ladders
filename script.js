@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-15i';
+  const BUILD = '2026-09-16a';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -801,13 +801,13 @@
     dealTimer = setTimeout(() => board.classList.remove('dealing'), 1100);
   }
 
-  // Purely cosmetic dressing on top of the plain numbered grid: a medallion
-  // behind the four outer corners, a start/finish flag on 1 and 100, and a
-  // sprinkle of the scene's own motifs (a heart, a leaf, a star…) on a
-  // handful of otherwise-empty cells. Placement is derived from this board's
-  // own ladder/snake layout rather than Math.random(), so reloading the same
-  // saved game shows the same decoration instead of it reshuffling on you —
-  // and it never lands on a cell a game rule actually cares about.
+  // Purely cosmetic dressing on top of the plain numbered grid: a
+  // start/finish flag on 1 and 100, and a sprinkle of the scene's own
+  // motifs (a heart, a leaf, a star…) on a handful of otherwise-empty
+  // cells. Placement is derived from this board's own ladder/snake layout
+  // rather than Math.random(), so reloading the same saved game shows the
+  // same decoration instead of it reshuffling on you — and it never lands
+  // on a cell a game rule actually cares about.
   function decorateBoard(theme) {
     const taken = new Set([1, 100]);
     Object.entries(state.ladders).forEach(([from, to]) => {
@@ -817,11 +817,6 @@
     Object.entries(state.snakes).forEach(([from, to]) => {
       taken.add(Number(from));
       taken.add(Number(to));
-    });
-
-    [1, 10, 91, 100].forEach((num) => {
-      const cell = cellEls[num];
-      if (cell) cell.classList.add('corner-cell');
     });
 
     const flag = (num, icon) => {
