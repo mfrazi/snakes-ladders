@@ -141,27 +141,28 @@ at a 16° tilt the near edge projects ~7% wider than the layout box.
 
 ## Heart powers
 
-Hearts come from answering (+3) and some surprises. The **Powers** button in
+Hearts come from answering (+2) and some surprises. The **Powers** button in
 the dock opens a sheet where the current player spends them before rolling:
 
 | Power | Cost | Effect |
 |---|---|---|
-| Re-roll | 3 | Not in the sheet. Offered only when a roll would land on a snake or overshoot 100. |
-| Shield | 5 | Blocks the next snake, however many turns later. |
-| Freeze | 6 | A chosen rival skips their next turn (uses `skipNext`). |
-| Boost | 8 | Adds 3 to the next roll, re-roll included. |
-| Loaded die | 10 | Pick the face (1–6) your next roll shows. No re-roll offer on it. |
-| Swap places | 15 | Trade squares with a chosen rival immediately. |
+| Re-roll | 2 | Not in the sheet. Offered only when a roll would land on a snake or overshoot 100. |
+| Shield | 4 | Blocks the next snake, however many turns later. |
+| Freeze | 5 | A chosen rival skips their next turn (uses `skipNext`). |
+| Rewind | 6 | Move a chosen rival back 5 squares immediately. |
+| Boost | 6 | Adds 3 to the next roll, re-roll included. |
+| Loaded die | 8 | Pick the face (1–6) your next roll shows. No re-roll offer on it. |
+| Swap places | 20 | Trade squares with a chosen rival immediately. |
 
 Costs, names and descriptions live in `POWERS` in `script.js`, and every label
 is filled from there — change them in one place. `SHOP` sets the sheet order.
 
 - **Refunds:** Shield, Boost, Loaded die and Freeze can be cancelled for a full
   refund until the dice are thrown (`armedThisTurn`); then they're committed.
-  Swap can't be refunded, because both pawns have already moved.
-- **Targets:** with one rival, Freeze and Swap act straight away; with more, the
-  row opens a picker. Freeze skips rivals already due to skip; Swap skips anyone
-  on your square.
+  Rewind and Swap can't be refunded, because pawns have already moved.
+- **Targets:** with one rival, Freeze, Rewind and Swap act straight away; with more, the
+  row opens a picker. Freeze skips rivals already due to skip; Rewind skips anyone
+  still on start (square 1); Swap skips anyone on your square.
 - **Stacking is allowed.** A loaded 4 with Boost moves 7.
 - A shield stops the pawn on the snake's head, and nothing further down a
   ladder/snake chain applies. Shield isn't consulted by the `swapPositions` /
@@ -172,7 +173,7 @@ is filled from there — change them in one place. `SHOP` sets the sheet order.
 
 Two motion details worth knowing before you touch them:
 
-The `+3` score float **falls** rather than rising — the score cards are pinned
+The `+2` score float **falls** rather than rising — the score cards are pinned
 to the top edge, and rising took the number off-screen in about a tenth of a
 second. Its keyframes are `linear` overall with easing on the **first segment
 only**; a single ease-out across the whole effect drops it to 8% opacity by the

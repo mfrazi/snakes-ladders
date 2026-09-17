@@ -47,17 +47,18 @@
   // see where you actually landed before the modal takes over the screen.
   const LANDING_PAUSE_MS = REDUCED_MOTION ? 150 : 900;
 
-  // Heart powers. An answered question pays 3, so a re-roll costs one answer.
+  // Heart powers. An answered question pays 2, so a re-roll costs one answer.
   // `target` powers act on a rival; `pick` powers ask for a number first.
   const POWERS = {
-    reroll: { cost: 3 },
-    shield: { cost: 5, name: 'Shield', icon: 'i-shield', desc: 'Your next snake can’t drop you.' },
-    freeze: { cost: 6, name: 'Freeze', icon: 'i-snow', desc: 'A rival skips their next turn.', target: true },
-    boost: { cost: 8, steps: 3, name: 'Boost +3', icon: 'i-bolt', desc: 'Adds 3 to your next roll.' },
-    loaded: { cost: 10, name: 'Loaded die', icon: 'i-dice', desc: 'Choose what your next roll shows.', pick: true },
-    swap: { cost: 15, name: 'Swap places', icon: 'i-swap', desc: 'Trade squares with a rival, right now.', target: true },
+    reroll: { cost: 2 },
+    shield: { cost: 4, name: 'Shield', icon: 'i-shield', desc: 'Your next snake can’t drop you.' },
+    freeze: { cost: 5, name: 'Freeze', icon: 'i-snow', desc: 'A rival skips their next turn.', target: true },
+    rewind: { cost: 6, name: 'Rewind', icon: 'i-history', desc: 'Move a rival back 5 squares.', target: true },
+    boost: { cost: 6, steps: 3, name: 'Boost +3', icon: 'i-bolt', desc: 'Adds 3 to your next roll.' },
+    loaded: { cost: 8, name: 'Loaded die', icon: 'i-dice', desc: 'Choose what your next roll shows.', pick: true },
+    swap: { cost: 20, name: 'Swap places', icon: 'i-swap', desc: 'Trade squares with a rival, right now.', target: true },
   };
-  const SHOP = ['shield', 'freeze', 'boost', 'loaded', 'swap'];
+  const SHOP = ['shield', 'freeze', 'rewind', 'boost', 'loaded', 'swap'];
 
   const $ = (id) => document.getElementById(id);
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -178,10 +179,16 @@
     } catch (e) {
       /* storage unavailable */
     }
+    
+    if (mode === 'couples' && roster.length > 2) {
+      roster.length = 2;
+    }
+    
     renderModeChoice();
     // Topic names change with the mode ("Love" reads wrong for friends), so
     // the chips are redrawn — keeping whatever was already selected.
     renderThemeChips();
+    renderRoster();
   }
 
   const themeOf = (key) => QUESTION_THEMES[key] || QUESTION_THEMES.general;
@@ -652,11 +659,13 @@
       list.appendChild(row);
     });
 
-    $('add-player-btn').classList.toggle('hidden', roster.length >= MAX_PLAYERS);
+    const maxAllowed = pendingMode === 'couples' ? 2 : MAX_PLAYERS;
+    $('add-player-btn').classList.toggle('hidden', roster.length >= maxAllowed);
   }
 
   function addPlayer() {
-    if (roster.length >= MAX_PLAYERS) return;
+    const maxAllowed = pendingMode === 'couples' ? 2 : MAX_PLAYERS;
+    if (roster.length >= maxAllowed) return;
     roster.push(defaultPlayer(roster.length));
     renderRoster();
   }
@@ -1292,8 +1301,8 @@
   // Drifts off the score card that changed, so points landing is something you
   // watch happen rather than a number that is quietly different next time you
   // look at the header.
-  //
-  // It falls rather than rises. The usual "+3 floats up" idiom assumes there is
+  // The +2 float.
+  // It falls rather than rises. The usual "+2 floats up" idiom assumes there is
   // room above the thing that scored — here the score cards are pinned to the
   // top edge of the window, and rising took the number off-screen within about
   // a tenth of a second. Downward, it plays out over the board.
@@ -1528,6 +1537,7 @@
     const me = state.players[state.current];
     return rivals().filter((i) => state.players[i].pos !== me.pos);
   };
+  const rewindTargets = () => rivals().filter((i) => state.players[i].pos > 1);
 
   // buyable · refundable (bought this turn, before rolling) · active (bought
   // earlier, now committed) · poor (can't afford) · none (no valid target)
@@ -1539,6 +1549,8 @@
       if (!freezeTargets().length) return 'none';
     } else if (kind === 'swap') {
       if (!swapTargets().length) return 'none';
+    } else if (kind === 'rewind') {
+      if (!rewindTargets().length) return 'none';
     } else if (me[kind]) {
       return armedThisTurn[kind] ? 'refundable' : 'active';
     }
@@ -1620,6 +1632,7 @@
     }
     if (status === 'none' && kind === 'freeze') return 'Every rival is already skipping a turn.';
     if (status === 'none' && kind === 'swap') return 'Everyone is on your square.';
+    if (status === 'none' && kind === 'rewind') return 'No rivals have left the start.';
     return '';
   }
 
@@ -1640,13 +1653,15 @@
     if (kind === 'loaded') {
       for (let n = 1; n <= 6; n++) add(String(n), `Roll a ${n}`, `pick-${n}`, () => buyLoaded(n));
     } else {
-      const targets = kind === 'freeze' ? freezeTargets() : swapTargets();
+      const targets = kind === 'freeze' ? freezeTargets() : kind === 'rewind' ? rewindTargets() : swapTargets();
       targets.forEach((i) => {
         const p = state.players[i];
-        const where = kind === 'swap' ? ` · ${p.pos}` : '';
-        add(`${p.emoji} ${p.name}${where}`, `${POWERS[kind].name}: ${p.name}`, `target-${i}`, () =>
-          kind === 'freeze' ? buyFreeze(i) : buySwap(i)
-        );
+        const where = (kind === 'swap' || kind === 'rewind') ? ` · ${p.pos}` : '';
+        add(`${p.emoji} ${p.name}${where}`, `${POWERS[kind].name}: ${p.name}`, `target-${i}`, () => {
+          if (kind === 'freeze') buyFreeze(i);
+          else if (kind === 'rewind') buyRewind(i);
+          else buySwap(i);
+        });
       });
     }
     // The first choice takes focus so a keyboard user lands on the options.
@@ -1680,9 +1695,13 @@
       return renderPowerSheet();
     }
     if (POWERS[kind].target) {
-      const targets = kind === 'freeze' ? freezeTargets() : swapTargets();
+      const targets = kind === 'freeze' ? freezeTargets() : kind === 'rewind' ? rewindTargets() : swapTargets();
       // With a single rival there's nothing to choose.
-      if (targets.length === 1) return kind === 'freeze' ? buyFreeze(targets[0]) : buySwap(targets[0]);
+      if (targets.length === 1) {
+        if (kind === 'freeze') return buyFreeze(targets[0]);
+        if (kind === 'rewind') return buyRewind(targets[0]);
+        return buySwap(targets[0]);
+      }
       pickingPower = pickingPower === kind ? null : kind;
       return renderPowerSheet();
     }
@@ -1706,6 +1725,23 @@
     state.players[target].skipNext = true;
     armedThisTurn.freeze = target;
     spend('freeze', `❄️ ${player.name} froze ${state.players[target].name}`);
+  }
+
+  async function buyRewind(target) {
+    if (!canUsePowers() || powerState('rewind') !== 'buyable' || !rewindTargets().includes(target)) return;
+    const player = state.players[state.current];
+    const other = state.players[target];
+    closePowers();
+    turnBusy = true;
+    animating = true;
+    spend('rewind', `⏪ ${player.name} rewound ${other.name} by 5`);
+    const newPos = Math.max(1, other.pos - 5);
+    await travelToken(target, other.pos, newPos);
+    other.pos = newPos;
+    animating = false;
+    turnBusy = false;
+    saveState();
+    renderAll();
   }
 
   // Swap happens on the spot and isn't refundable — both pawns have already
@@ -2039,8 +2075,8 @@
     if (state.answers.length > 80) state.answers.shift();
 
     if (answered) {
-      player.love += 3;
-      logMessage(`💗 ${player.name} +3`);
+      player.love += 2;
+      logMessage(`💗 ${player.name} +2`);
     } else {
       logMessage(`⏭️ ${player.name} skipped`);
     }
