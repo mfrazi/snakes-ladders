@@ -15,14 +15,10 @@
 <link rel="stylesheet" href="style.css" />
 
 <!--
-  Preloaded ahead of the CSS discovering it: this is the weight the <h1>
-  below actually renders in (font-weight: 660 has no exact match among the
-  three self-hosted Inter files, and 660 lands closer to 700 than 600), and
-  that <h1> is the LCP element. font-display: swap already means nothing
-  BLOCKS on this — it's here purely so the LCP text doesn't visibly flash
-  from fallback to Inter a beat after first paint.
+  The <h1> is the LCP element and renders in this face. Preloading it means the
+  headline doesn't visibly swap from the fallback serif a beat after first paint.
 -->
-<link rel="preload" href="assets/fonts/inter-700.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="assets/fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin />
 
 <!--
   Both scripts are `defer`, and in <head> rather than at the end of <body>.
@@ -40,6 +36,11 @@
 -->
 <script defer src="data.js"></script>
 <script defer src="script.js"></script>
+
+<!-- Preconnect to AI provider APIs to accelerate DNS/TLS for first query -->
+<link rel="preconnect" href="https://api.anthropic.com" crossorigin />
+<link rel="preconnect" href="https://api.openai.com" crossorigin />
+<link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin />
 
 <!--
   SEO. The origin below is hardcoded to the real, live domain — matching
@@ -191,6 +192,22 @@
       stroke="none"
     />
   </symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24">
+    <path d="M12 3 5 6v5.2c0 4.3 2.9 8.1 7 9.3 4.1-1.2 7-5 7-9.3V6z" />
+  </symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24">
+    <path d="M13.5 2.5 5 13.5h6.5l-1 8 8.5-11h-6.5z" />
+  </symbol>
+  <symbol id="i-snow" viewBox="0 0 24 24">
+    <path d="M12 2.5v19M3.8 7.2l16.4 9.6M20.2 7.2 3.8 16.8" />
+    <path d="m9.6 4.2 2.4 2 2.4-2M9.6 19.8l2.4-2 2.4 2" />
+  </symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24">
+    <path d="M7.5 4 4 7.5 7.5 11" />
+    <path d="M4 7.5h15" />
+    <path d="m16.5 13 3.5 3.5-3.5 3.5" />
+    <path d="M20 16.5H5" />
+  </symbol>
   <symbol id="i-dice" viewBox="0 0 24 24">
     <rect x="3.5" y="3.5" width="17" height="17" rx="4.5" />
     <circle cx="8.5" cy="8.5" r="1.4" fill="currentColor" stroke="none" />
@@ -222,7 +239,7 @@
     <p>
       Pick <strong>Couples mode</strong> for questions and dares written for two
       partners, or <strong>Friends mode</strong> for a version with nothing
-      romantic in it. There are more than 190 questions across twelve topics —
+      romantic in it. There are 600+ questions across twelve topics —
       Love, Money, Dreams, Deep Talk, Memories, Home &amp; Family, Growth,
       Gratitude, Adventure, Everyday, General and Fun &amp; Dare — plus 42
       surprise cards, six randomly generated board scenes, and an optional mode
@@ -268,13 +285,15 @@
     <section class="field">
       <div class="field-head">
         <h2 class="field-label">Players</h2>
-        <span class="field-hint">Tap a face or dot to change</span>
       </div>
       <div id="player-list" class="player-list"></div>
-      <button type="button" id="add-player-btn" class="add-btn">
-        <svg class="icon icon-sm"><use href="#i-plus" /></svg>
-        Add player
-      </button>
+      <div class="field-foot">
+        <button type="button" id="add-player-btn" class="link-btn">
+          <svg class="icon icon-sm"><use href="#i-plus" /></svg>
+          Add player
+        </button>
+        <span class="field-hint">Tap a face or colour to change it</span>
+      </div>
     </section>
 
     <section class="field">
@@ -288,18 +307,7 @@
     <div class="setup-foot">
       <button type="button" id="start-btn" class="primary-btn block-btn">Start game</button>
       <div class="setup-meta">
-        <span id="scene-label" class="scene-label"></span>
         <div class="setup-links">
-          <a
-            href="https://github.com/mfrazi/snakes-ladders"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="link-btn"
-            title="View source on GitHub"
-            aria-label="View source on GitHub"
-          >
-            <svg class="icon icon-sm"><use href="#i-github" /></svg>
-          </a>
           <button type="button" id="setup-ai-btn" class="link-btn">
             <svg class="icon icon-sm"><use href="#i-sparkle" /></svg>
             AI questions
@@ -316,6 +324,16 @@
             Install app
           </button>
         </div>
+        <a
+          href="https://github.com/mfrazi/snakes-ladders"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="link-btn icon-link"
+          title="View source on GitHub"
+          aria-label="View source on GitHub"
+        >
+          <svg class="icon"><use href="#i-github" /></svg>
+        </a>
       </div>
     </div>
   </div>
@@ -356,11 +374,25 @@
   </div>
 
   <div class="dock">
-    <div id="turn-banner" class="turn-banner"></div>
-    <button type="button" id="roll-btn" class="primary-btn roll-btn">
-      <svg class="icon"><use href="#i-dice" /></svg>
-      Roll
-    </button>
+    <div class="dock-main">
+      <div id="turn-banner" class="turn-banner" aria-live="polite"></div>
+      <button type="button" id="roll-btn" class="primary-btn roll-btn">
+        <svg class="icon"><use href="#i-dice" /></svg>
+        Roll
+      </button>
+    </div>
+    <!--
+      One entry point for every power: five no longer fit on a phone-width row,
+      and each needs a line of explanation the sheet has room for. The status
+      line says what the current player already has armed.
+    -->
+    <div class="powers">
+      <button type="button" id="powers-btn" class="power-btn" aria-haspopup="dialog">
+        <span class="power-name">Powers</span>
+        <span class="power-cost"><span class="power-cost-num" id="dock-hearts">0</span><svg class="icon icon-xs"><use href="#i-heart" /></svg><span class="visually-hidden"> hearts</span></span>
+      </button>
+      <p class="powers-status" id="powers-status" aria-live="polite"></p>
+    </div>
   </div>
 </section>
 </main>
@@ -374,6 +406,44 @@
     <div class="dice-shadow"></div>
   </div>
   <p class="dice-hint">Tap to skip</p>
+</div>
+
+<!-- HEART POWERS -->
+<div id="powers-modal" class="modal-backdrop hidden">
+  <div class="modal-box powers-sheet" role="dialog" aria-modal="true" aria-labelledby="powers-title">
+    <div class="powers-head">
+      <div class="powers-head-text">
+        <p class="modal-kicker" id="powers-player"></p>
+        <h2 class="modal-title" id="powers-title">Heart powers</h2>
+      </div>
+      <p class="powers-balance">
+        <span class="power-cost-num" id="powers-balance"></span><svg class="icon icon-sm"><use href="#i-heart" /></svg><span class="visually-hidden"> hearts</span>
+      </p>
+    </div>
+    <p class="modal-sub">
+      Spend on your turn, before you roll. A <strong>re-roll</strong> costs
+      <span id="powers-reroll-cost"></span> and is offered when a roll would land you on a snake or past 100.
+    </p>
+    <ul class="power-list" id="power-list"></ul>
+    <div class="modal-actions">
+      <button type="button" id="powers-done-btn" class="primary-btn block-btn">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- RE-ROLL (offered only when the roll just thrown is a bad one) -->
+<div id="reroll-modal" class="modal-backdrop hidden">
+  <div class="modal-box modal-narrow">
+    <p class="modal-kicker">Heart power</p>
+    <h2 class="modal-title" id="reroll-title"></h2>
+    <p class="modal-sub" id="reroll-body"></p>
+    <div class="modal-actions">
+      <button type="button" id="reroll-yes-btn" class="primary-btn block-btn">
+        Re-roll for <span class="power-cost-num">3</span><svg class="icon icon-sm"><use href="#i-heart" /></svg>
+      </button>
+      <button type="button" id="reroll-no-btn" class="ghost-btn"></button>
+    </div>
+  </div>
 </div>
 
 <!-- QUESTION -->
@@ -398,6 +468,7 @@
 <!-- SURPRISE -->
 <div id="surprise-modal" class="modal-backdrop hidden">
   <div class="modal-box">
+    <p class="modal-kicker">Surprise</p>
     <div id="surprise-icon" class="surprise-icon"></div>
     <p id="surprise-text" class="modal-question"></p>
     <div class="modal-actions">
@@ -409,8 +480,8 @@
 <!-- WIN -->
 <div id="win-modal" class="modal-backdrop hidden">
   <div class="modal-box">
-    <div class="surprise-icon">🏆</div>
-    <p id="win-text" class="modal-question"></p>
+    <p class="modal-kicker">Game over</p>
+    <h2 id="win-text" class="modal-title modal-title-lg"></h2>
     <div id="win-summary" class="win-summary"></div>
     <div class="modal-actions">
       <button type="button" id="play-again-btn" class="primary-btn block-btn">Play again</button>
@@ -439,7 +510,7 @@
 
 <!-- AI SETTINGS -->
 <div id="ai-modal" class="modal-backdrop hidden">
-  <div class="modal-box modal-left">
+  <div class="modal-box">
     <h2 class="modal-title">AI questions</h2>
     <p class="modal-sub">Questions written live for your game. Your key stays in this browser only.</p>
 
@@ -465,7 +536,7 @@
 
 <!-- INSTALL (iOS only — every other browser gets the native prompt instead) -->
 <div id="install-modal" class="modal-backdrop hidden">
-  <div class="modal-box modal-left">
+  <div class="modal-box">
     <h2 class="modal-title" id="install-title">Install this app</h2>
     <p class="modal-sub">
       Safari doesn't offer an install button, so iOS needs two taps. Once added, the

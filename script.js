@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-16a';
+  const BUILD = '2026-09-17b';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -47,6 +47,18 @@
   // see where you actually landed before the modal takes over the screen.
   const LANDING_PAUSE_MS = REDUCED_MOTION ? 150 : 900;
 
+  // Heart powers. An answered question pays 3, so a re-roll costs one answer.
+  // `target` powers act on a rival; `pick` powers ask for a number first.
+  const POWERS = {
+    reroll: { cost: 3 },
+    shield: { cost: 5, name: 'Shield', icon: 'i-shield', desc: 'Your next snake can’t drop you.' },
+    freeze: { cost: 6, name: 'Freeze', icon: 'i-snow', desc: 'A rival skips their next turn.', target: true },
+    boost: { cost: 8, steps: 3, name: 'Boost +3', icon: 'i-bolt', desc: 'Adds 3 to your next roll.' },
+    loaded: { cost: 10, name: 'Loaded die', icon: 'i-dice', desc: 'Choose what your next roll shows.', pick: true },
+    swap: { cost: 15, name: 'Swap places', icon: 'i-swap', desc: 'Trade squares with a rival, right now.', target: true },
+  };
+  const SHOP = ['shield', 'freeze', 'boost', 'loaded', 'swap'];
+
   const $ = (id) => document.getElementById(id);
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -81,6 +93,15 @@
   //                the pawn landing and the question appearing.
   let animating = false;
   let turnBusy = false;
+  // Powers bought since the current player last rolled. Only these can be
+  // refunded — once the dice leave the hand, a purchase is committed.
+  let armedThisTurn = freshArmed();
+  // Which power in the sheet is waiting on a choice (a rival, or a die face).
+  let pickingPower = null;
+
+  function freshArmed() {
+    return { shield: false, boost: false, loaded: false, freeze: null };
+  }
   let pendingSurprise = null;
   let currentQuestion = null;
   let diceSpins = 0;
@@ -168,11 +189,6 @@
   function themeLabel(key) {
     const theme = themeOf(key);
     return (activeMode() === 'friends' && theme.friendsLabel) || theme.label;
-  }
-
-  function themeIcon(key) {
-    const theme = themeOf(key);
-    return (activeMode() === 'friends' && theme.friendsIcon) || theme.icon;
   }
 
   // A theme's pool is its shared questions plus the ones written for the mode
@@ -371,16 +387,12 @@
     root.setProperty('--cell-ink', theme.cellInk);
     root.setProperty('--rose', theme.accent);
     root.setProperty('--rose-deep', theme.accentDeep);
+    document.documentElement.dataset.glass = theme.glass || 'light';
 
     // Installed as a PWA, this tints the OS status bar / title bar to match
     // whichever scene is live, same as everything else in the app already does.
     const meta = $('theme-color-meta');
     if (meta) meta.setAttribute('content', theme.accent);
-
-    // The setup screen already wears the scene it's about to deal; naming it
-    // turns that from "why is this one green" into a visible part of the game.
-    const label = $('scene-label');
-    if (label) label.textContent = `${theme.label} board`;
   }
 
   // Inline SVG textures on their own layers, each drifting or twinkling.
@@ -579,11 +591,18 @@
       const row = document.createElement('div');
       row.className = 'player-row';
 
+      const num = document.createElement('span');
+      num.className = 'player-num';
+      num.setAttribute('aria-hidden', 'true');
+      num.textContent = String(index + 1).padStart(2, '0');
+      row.appendChild(num);
+
       const emojiBtn = document.createElement('button');
       emojiBtn.type = 'button';
       emojiBtn.className = 'chip-btn';
       emojiBtn.textContent = player.emoji;
       emojiBtn.title = 'Tap to change';
+      emojiBtn.setAttribute('aria-label', `Change face for player ${index + 1}`);
       emojiBtn.addEventListener('click', () => {
         player.emoji = nextFree(EMOJI_CHOICES, player.emoji, takenBy('emoji', player));
         emojiBtn.textContent = player.emoji;
@@ -594,6 +613,7 @@
       input.type = 'text';
       input.maxLength = 16;
       input.placeholder = `Player ${index + 1}`;
+      input.setAttribute('aria-label', `Player ${index + 1} name`);
       input.value = player.name;
       input.addEventListener('input', () => {
         player.name = input.value;
@@ -604,6 +624,7 @@
       colorBtn.className = 'chip-btn color-chip';
       colorBtn.style.background = player.color;
       colorBtn.title = 'Tap to change';
+      colorBtn.setAttribute('aria-label', `Change colour for player ${index + 1}`);
       colorBtn.addEventListener('click', () => {
         player.color = nextFree(COLOR_CHOICES, player.color, takenBy('color', player));
         colorBtn.style.background = player.color;
@@ -619,7 +640,8 @@
         removeBtn.type = 'button';
         removeBtn.className = 'chip-btn remove-chip';
         removeBtn.title = 'Remove player';
-        removeBtn.innerHTML = '<svg class="icon icon-xs"><use href="#i-close" /></svg>';
+        removeBtn.setAttribute('aria-label', `Remove player ${index + 1}`);
+        removeBtn.innerHTML = '<svg class="icon icon-sm"><use href="#i-close" /></svg>';
         removeBtn.addEventListener('click', () => {
           roster.splice(index, 1);
           renderRoster();
@@ -649,6 +671,7 @@
       btn.dataset.mode = key;
       btn.textContent = mode.label;
       btn.classList.toggle('selected', pendingMode === key);
+      btn.setAttribute('aria-pressed', pendingMode === key);
       btn.addEventListener('click', () => setPendingMode(key));
       container.appendChild(btn);
     });
@@ -676,8 +699,7 @@
       chip.classList.toggle('selected', firstDraw || keep.has(key));
       chip.dataset.theme = key;
       chip.style.setProperty('--chip-color', themeOf(key).color);
-      chip.innerHTML = '<span class="chip-icon"></span><span class="chip-label"></span>';
-      chip.querySelector('.chip-icon').textContent = themeIcon(key);
+      chip.innerHTML = '<span class="chip-swatch" aria-hidden="true"></span><span class="chip-label"></span>';
       chip.querySelector('.chip-label').textContent = themeLabel(key);
       container.appendChild(chip);
     });
@@ -716,6 +738,9 @@
 
   function syncThemeToggle() {
     const container = $('theme-chips');
+    container.querySelectorAll('.theme-chip').forEach((chip) => {
+      chip.setAttribute('aria-pressed', chip.classList.contains('selected'));
+    });
     const total = container.querySelectorAll('.theme-chip').length;
     const on = container.querySelectorAll('.theme-chip.selected').length;
     $('theme-toggle-all').textContent = on === total ? 'Clear all' : `Select all (${total - on})`;
@@ -1213,7 +1238,10 @@
         const card = document.createElement('div');
         card.className = 'score-card';
         card.innerHTML =
+          '<span class="score-swatch" aria-hidden="true"></span>' +
           '<span class="score-emoji"></span><span class="score-name"></span>' +
+          '<svg class="icon icon-xs score-shield" role="img" aria-label="Shield up"><use href="#i-shield" /></svg>' +
+          '<svg class="icon icon-xs score-frozen" role="img" aria-label="Skips next turn"><use href="#i-snow" /></svg>' +
           `<span class="score-points"><span class="pts-num"></span>${HEART_ICON}</span>`;
         scores.appendChild(card);
       });
@@ -1227,6 +1255,8 @@
       card.querySelector('.pts-num').textContent = player.love;
       card.style.setProperty('--player-color', player.color);
       card.classList.toggle('active', state.current === i && !state.finished);
+      card.classList.toggle('has-shield', Boolean(player.shield));
+      card.classList.toggle('is-frozen', Boolean(player.skipNext));
 
       const before = lastLove ? lastLove[i] : null;
       if (typeof before === 'number' && before !== player.love) {
@@ -1240,17 +1270,22 @@
     const current = state.players[state.current];
     const face = state.finished ? '🏁' : current.emoji;
     const label = state.finished ? 'Game over' : current.name;
-    if (banner.dataset.showing !== `${face}|${label}`) {
-      banner.innerHTML = '<span class="turn-emoji"></span><span class="turn-name"></span>';
+    const showing = `${face}|${label}|${state.finished ? '' : current.color}`;
+    if (banner.dataset.showing !== showing) {
+      banner.innerHTML =
+        '<span class="turn-swatch" aria-hidden="true"></span><span class="turn-emoji"></span><span class="turn-name"></span>';
+      banner.querySelector('.turn-swatch').classList.toggle('hidden', state.finished);
+      banner.style.setProperty('--player-color', current.color);
       banner.querySelector('.turn-emoji').textContent = face;
       banner.querySelector('.turn-name').textContent = label;
-      banner.dataset.showing = `${face}|${label}`;
+      banner.dataset.showing = showing;
       pulse(banner, 'swap');
     }
 
     const roll = $('roll-btn');
     roll.disabled = state.finished || turnBusy || animating;
     roll.classList.toggle('ready', !roll.disabled && modalsClosed());
+    renderPowers();
     placeTokens();
   }
 
@@ -1278,7 +1313,7 @@
       .animate(
         [
           // Snappy on the way in...
-          { transform: 'translate(-50%, -10px) scale(0.7)', opacity: 0, easing: 'cubic-bezier(0.2, 1.5, 0.4, 1)' },
+          { transform: 'translate(-50%, -10px) scale(0.85)', opacity: 0, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
           { transform: 'translate(-50%, 3px) scale(1)', opacity: 1, offset: 0.2 },
           // ...then a flat, readable hold before it goes.
           { transform: 'translate(-50%, 14px) scale(1)', opacity: 1, offset: 0.6 },
@@ -1334,7 +1369,7 @@
 
         const who = document.createElement('div');
         who.className = 'who';
-        who.textContent = `${entry.emoji || ''} ${entry.player} · ${themeIcon(entry.theme)} ${themeLabel(entry.theme)}${entry.ai ? ' · AI' : ''}`;
+        who.textContent = `${entry.emoji || ''} ${entry.player} · ${themeLabel(entry.theme)}${entry.ai ? ' · AI' : ''}`;
 
         const q = document.createElement('div');
         q.className = 'q';
@@ -1458,19 +1493,306 @@
     if (turnBusy || animating || state.finished || !modalsClosed()) return;
     turnBusy = true;
     animating = true;
+    armedThisTurn = freshArmed();
+
+    // A loaded die decides the face; the throw still plays so it reads as a roll.
+    const player = state.players[state.current];
+    const loaded = player.loaded || 0;
+    player.loaded = 0;
     renderAll();
 
-    const roll = 1 + Math.floor(Math.random() * 6);
+    const roll = loaded || 1 + Math.floor(Math.random() * 6);
     state.lastRoll = roll;
     soundDice();
     await animateDice(roll);
-    await handleRoll(roll);
+    await handleRoll(roll, Boolean(loaded));
   }
 
-  function modalsClosed() {
-    return ['question-modal', 'surprise-modal', 'win-modal', 'ai-modal', 'confirm-modal'].every((id) =>
-      $(id).classList.contains('hidden')
-    );
+  function modalsClosed(except) {
+    return ['question-modal', 'surprise-modal', 'win-modal', 'ai-modal', 'confirm-modal', 'reroll-modal', 'powers-modal']
+      .filter((id) => id !== except)
+      .every((id) => $(id).classList.contains('hidden'));
+  }
+
+  // ---------- Heart powers ----------
+  // Everything but Re-roll is bought from the powers sheet, before rolling.
+  // Re-roll is only worth anything once you've seen a bad roll, so it's
+  // offered at that moment instead (see handleRoll).
+  function canUsePowers() {
+    return Boolean(state) && !state.finished && !turnBusy && !animating && modalsClosed('powers-modal');
+  }
+
+  const rivals = () => otherIndexes();
+  const freezeTargets = () => rivals().filter((i) => !state.players[i].skipNext);
+  const swapTargets = () => {
+    const me = state.players[state.current];
+    return rivals().filter((i) => state.players[i].pos !== me.pos);
+  };
+
+  // buyable · refundable (bought this turn, before rolling) · active (bought
+  // earlier, now committed) · poor (can't afford) · none (no valid target)
+  function powerState(kind) {
+    const me = state.players[state.current];
+    const { cost } = POWERS[kind];
+    if (kind === 'freeze') {
+      if (armedThisTurn.freeze !== null) return 'refundable';
+      if (!freezeTargets().length) return 'none';
+    } else if (kind === 'swap') {
+      if (!swapTargets().length) return 'none';
+    } else if (me[kind]) {
+      return armedThisTurn[kind] ? 'refundable' : 'active';
+    }
+    return me.love >= cost ? 'buyable' : 'poor';
+  }
+
+  function renderPowers() {
+    const me = state.players[state.current];
+    $('dock-hearts').textContent = me.love;
+    $('powers-btn').disabled = !canUsePowers() || !modalsClosed();
+
+    const armed = [];
+    if (me.shield) armed.push('Shield on');
+    if (me.boost) armed.push(`Boost +${POWERS.boost.steps}`);
+    if (me.loaded) armed.push(`Next roll ${me.loaded}`);
+    if (armedThisTurn.freeze !== null) armed.push(`${state.players[armedThisTurn.freeze].name} frozen`);
+    $('powers-status').textContent = armed.join(' · ');
+
+    if (!$('powers-modal').classList.contains('hidden')) renderPowerSheet();
+  }
+
+  function renderPowerSheet() {
+    const me = state.players[state.current];
+    $('powers-player').textContent = `${me.emoji} ${me.name}`;
+    $('powers-balance').textContent = me.love;
+
+    // Rebuilding the list would drop keyboard focus; put it back where it was.
+    const focusKey = document.activeElement && document.activeElement.dataset.focusKey;
+    const list = $('power-list');
+    list.innerHTML = '';
+
+    SHOP.forEach((kind) => {
+      const power = POWERS[kind];
+      const status = powerState(kind);
+
+      const row = document.createElement('li');
+      row.className = 'power-row';
+      row.dataset.state = status;
+      row.innerHTML =
+        `<svg class="icon power-icon" aria-hidden="true"><use href="#${power.icon}" /></svg>` +
+        '<div class="power-text"><span class="power-title"></span><span class="power-desc"></span></div>' +
+        '<button type="button" class="power-buy"></button>';
+      row.querySelector('.power-title').textContent = power.name;
+      row.querySelector('.power-desc').textContent = powerNote(kind, status) || power.desc;
+
+      const buy = row.querySelector('.power-buy');
+      buy.dataset.focusKey = `buy-${kind}`;
+      if (status === 'refundable') {
+        buy.textContent = 'Cancel';
+        buy.setAttribute('aria-label', `Cancel ${power.name} and get ${power.cost} hearts back`);
+      } else if (status === 'active') {
+        buy.textContent = 'Active';
+        buy.disabled = true;
+      } else {
+        buy.innerHTML = `<span class="power-cost-num"></span>${HEART_ICON}`;
+        buy.querySelector('.power-cost-num').textContent = power.cost;
+        buy.disabled = status !== 'buyable';
+        buy.setAttribute('aria-label', `${power.name}, ${power.cost} hearts`);
+        buy.setAttribute('aria-expanded', String(pickingPower === kind));
+      }
+      buy.addEventListener('click', () => onPowerBuy(kind));
+
+      if (pickingPower === kind && status === 'buyable') row.appendChild(powerChoices(kind));
+      list.appendChild(row);
+    });
+
+    if (focusKey) {
+      const again = list.querySelector(`[data-focus-key="${focusKey}"]`);
+      if (again && !again.disabled) again.focus();
+    }
+  }
+
+  function powerNote(kind, status) {
+    const me = state.players[state.current];
+    if (status === 'active' && kind === 'shield') return 'On until you meet a snake.';
+    if (status === 'refundable' && kind === 'loaded') return `Your next roll will be a ${me.loaded}.`;
+    if (status === 'refundable' && kind === 'freeze') {
+      return `${state.players[armedThisTurn.freeze].name} skips their next turn.`;
+    }
+    if (status === 'none' && kind === 'freeze') return 'Every rival is already skipping a turn.';
+    if (status === 'none' && kind === 'swap') return 'Everyone is on your square.';
+    return '';
+  }
+
+  function powerChoices(kind) {
+    const wrap = document.createElement('div');
+    wrap.className = 'power-choices';
+    const add = (label, aria, key, onPick) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'choice-btn';
+      btn.textContent = label;
+      btn.setAttribute('aria-label', aria);
+      btn.dataset.focusKey = key;
+      btn.addEventListener('click', onPick);
+      wrap.appendChild(btn);
+    };
+
+    if (kind === 'loaded') {
+      for (let n = 1; n <= 6; n++) add(String(n), `Roll a ${n}`, `pick-${n}`, () => buyLoaded(n));
+    } else {
+      const targets = kind === 'freeze' ? freezeTargets() : swapTargets();
+      targets.forEach((i) => {
+        const p = state.players[i];
+        const where = kind === 'swap' ? ` · ${p.pos}` : '';
+        add(`${p.emoji} ${p.name}${where}`, `${POWERS[kind].name}: ${p.name}`, `target-${i}`, () =>
+          kind === 'freeze' ? buyFreeze(i) : buySwap(i)
+        );
+      });
+    }
+    // The first choice takes focus so a keyboard user lands on the options.
+    requestAnimationFrame(() => {
+      const first = wrap.querySelector('.choice-btn');
+      if (first && !wrap.contains(document.activeElement)) first.focus();
+    });
+    return wrap;
+  }
+
+  function spend(kind, message) {
+    const player = state.players[state.current];
+    player.love -= POWERS[kind].cost;
+    pickingPower = null;
+    logMessage(`${message} (−${POWERS[kind].cost})`);
+    soundStep();
+    saveState();
+    renderAll();
+  }
+
+  function onPowerBuy(kind) {
+    if (!canUsePowers()) return;
+    const player = state.players[state.current];
+    const status = powerState(kind);
+
+    if (status === 'refundable') return refundPower(kind);
+    if (status !== 'buyable') return;
+
+    if (POWERS[kind].pick) {
+      pickingPower = pickingPower === kind ? null : kind;
+      return renderPowerSheet();
+    }
+    if (POWERS[kind].target) {
+      const targets = kind === 'freeze' ? freezeTargets() : swapTargets();
+      // With a single rival there's nothing to choose.
+      if (targets.length === 1) return kind === 'freeze' ? buyFreeze(targets[0]) : buySwap(targets[0]);
+      pickingPower = pickingPower === kind ? null : kind;
+      return renderPowerSheet();
+    }
+
+    player[kind] = true;
+    armedThisTurn[kind] = true;
+    spend(kind, kind === 'shield' ? `🛡️ ${player.name} raised a shield` : `⚡ ${player.name} boosted the next roll`);
+  }
+
+  function buyLoaded(n) {
+    if (!canUsePowers() || powerState('loaded') !== 'buyable') return;
+    const player = state.players[state.current];
+    player.loaded = n;
+    armedThisTurn.loaded = true;
+    spend('loaded', `🎯 ${player.name} loaded the die to ${n}`);
+  }
+
+  function buyFreeze(target) {
+    if (!canUsePowers() || powerState('freeze') !== 'buyable' || !freezeTargets().includes(target)) return;
+    const player = state.players[state.current];
+    state.players[target].skipNext = true;
+    armedThisTurn.freeze = target;
+    spend('freeze', `❄️ ${player.name} froze ${state.players[target].name}`);
+  }
+
+  // Swap happens on the spot and isn't refundable — both pawns have already
+  // moved. The sheet closes first so the trade is actually seen.
+  async function buySwap(target) {
+    if (!canUsePowers() || powerState('swap') !== 'buyable' || !swapTargets().includes(target)) return;
+    const player = state.players[state.current];
+    const other = state.players[target];
+    closePowers();
+    turnBusy = true;
+    animating = true;
+    spend('swap', `🔀 ${player.name} swapped places with ${other.name}`);
+    const [mine, theirs] = [player.pos, other.pos];
+    await Promise.all([travelToken(state.current, mine, theirs), travelToken(target, theirs, mine)]);
+    player.pos = theirs;
+    other.pos = mine;
+    animating = false;
+    turnBusy = false;
+    saveState();
+    renderAll();
+  }
+
+  function refundPower(kind) {
+    const player = state.players[state.current];
+    const { cost, name } = POWERS[kind];
+    if (kind === 'freeze') {
+      state.players[armedThisTurn.freeze].skipNext = false;
+      armedThisTurn.freeze = null;
+    } else {
+      player[kind] = kind === 'loaded' ? 0 : false;
+      armedThisTurn[kind] = false;
+    }
+    player.love += cost;
+    logMessage(`↩️ ${player.name} cancelled ${name} (+${cost})`);
+    soundStep();
+    saveState();
+    renderAll();
+  }
+
+  function openPowers() {
+    if (!canUsePowers() || !modalsClosed()) return;
+    pickingPower = null;
+    $('powers-modal').classList.remove('hidden');
+    renderAll();
+  }
+
+  function closePowers() {
+    pickingPower = null;
+    $('powers-modal').classList.add('hidden');
+    renderAll();
+  }
+
+  // What's wrong with landing on `target`, if anything worth spending a
+  // re-roll on. A snake that a shield will block doesn't count.
+  function rollTrouble(player, target) {
+    if (target > 100) return { kind: 'overshoot' };
+    if (target === 100) return null;
+    const snake = ladderSnakeHops(target).find((hop) => hop.type === 'snake');
+    if (snake && !player.shield) return { kind: 'snake', from: snake.from, to: snake.to };
+    return null;
+  }
+
+  let rerollChoice = null;
+
+  function offerReroll(player, roll, bonus, trouble) {
+    const thrown = bonus ? `${roll} (+${bonus} boost)` : `${roll}`;
+    if (trouble.kind === 'snake') {
+      $('reroll-title').textContent = 'Snake ahead';
+      $('reroll-body').textContent = `You rolled ${thrown}. That lands on the snake at ${trouble.from}, which drops you to ${trouble.to}.`;
+      $('reroll-no-btn').textContent = 'Take the snake';
+    } else {
+      $('reroll-title').textContent = 'Too far';
+      $('reroll-body').textContent = `You rolled ${thrown}, but you need exactly ${100 - player.pos} to finish.`;
+      $('reroll-no-btn').textContent = 'Stay put';
+    }
+    $('reroll-modal').classList.remove('hidden');
+    return new Promise((resolve) => {
+      rerollChoice = resolve;
+    });
+  }
+
+  function closeReroll(accepted) {
+    if (!rerollChoice) return;
+    $('reroll-modal').classList.add('hidden');
+    const resolve = rerollChoice;
+    rerollChoice = null;
+    resolve(accepted);
   }
 
   function ladderSnakeHops(startPos) {
@@ -1497,6 +1819,14 @@
     player.pos = landedOn;
 
     for (const hop of ladderSnakeHops(landedOn)) {
+      if (hop.type === 'snake' && player.shield) {
+        // The shield is spent and the slide never happens — the pawn stays on
+        // the snake's head, and nothing further down the chain applies.
+        player.shield = false;
+        logMessage(`🛡️ ${player.name}'s shield stopped the snake on ${hop.from}`);
+        soundLadder();
+        break;
+      }
       logMessage(hop.type === 'ladder' ? `🪜 ${hop.from} → ${hop.to}` : `🐍 ${hop.from} → ${hop.to}`);
       if (hop.type === 'ladder') soundLadder();
       else soundSnake();
@@ -1507,10 +1837,35 @@
     flashCell(player.pos);
   }
 
-  async function handleRoll(roll) {
+  async function handleRoll(firstRoll, loaded) {
     const player = state.players[state.current];
-    const target = player.pos + roll;
-    logMessage(`🎲 ${player.name}: ${roll}`);
+    let roll = firstRoll;
+    // A boost is spent on this roll whatever happens next, and still applies
+    // if the player re-rolls.
+    const bonus = player.boost ? POWERS.boost.steps : 0;
+    player.boost = false;
+    logMessage(`🎲 ${player.name}: ${roll}${loaded ? ' (loaded)' : ''}${bonus ? ` +${bonus}` : ''}`);
+    let target = player.pos + roll + bonus;
+
+    // No re-roll offer on a loaded die: that roll was chosen, not dealt.
+    const trouble = loaded ? null : rollTrouble(player, target);
+    if (trouble && player.love >= POWERS.reroll.cost) {
+      animating = false;
+      renderAll();
+      if (await offerReroll(player, roll, bonus, trouble)) {
+        player.love -= POWERS.reroll.cost;
+        logMessage(`🎲 ${player.name} re-rolled (−${POWERS.reroll.cost})`);
+        animating = true;
+        renderAll();
+        roll = 1 + Math.floor(Math.random() * 6);
+        state.lastRoll = roll;
+        soundDice();
+        await animateDice(roll);
+        logMessage(`🎲 ${player.name}: ${roll}${bonus ? ` +${bonus}` : ''}`);
+        target = player.pos + roll + bonus;
+      }
+      animating = true;
+    }
 
     if (target > 100) {
       logMessage(`🎯 ${player.name} needs exactly ${100 - player.pos}`);
@@ -1591,13 +1946,17 @@
     });
   }
 
-  function applyQuestion(text, themeKey, isAi) {
-    currentQuestion = { text, theme: themeKey, ai: isAi };
-
+  function setQuestionBadge(themeKey, isAi) {
     const badge = $('question-theme-badge');
-    badge.textContent = `${themeIcon(themeKey)} ${themeLabel(themeKey)}`;
+    badge.innerHTML = '<span class="badge-swatch" aria-hidden="true"></span><span class="badge-label"></span>';
+    badge.querySelector('.badge-label').textContent = themeLabel(themeKey);
     badge.style.setProperty('--tile-color', themeOf(themeKey).color);
     badge.classList.toggle('ai', isAi);
+  }
+
+  function applyQuestion(text, themeKey, isAi) {
+    currentQuestion = { text, theme: themeKey, ai: isAi };
+    setQuestionBadge(themeKey, isAi);
 
     const el = $('question-text');
     el.classList.remove('loading');
@@ -1608,13 +1967,9 @@
   }
 
   function showQuestionLoading(themeKey) {
-    const badge = $('question-theme-badge');
-    badge.textContent = `${themeIcon(themeKey)} ${themeLabel(themeKey)}`;
-    badge.style.setProperty('--tile-color', themeOf(themeKey).color);
-    badge.classList.add('ai');
-
+    setQuestionBadge(themeKey, true);
     const el = $('question-text');
-    el.textContent = '✨ …';
+    el.textContent = 'Writing a question…';
     el.classList.add('loading');
   }
 
@@ -2291,6 +2646,13 @@
     $('add-player-btn').addEventListener('click', addPlayer);
     $('start-btn').addEventListener('click', startGame);
     $('roll-btn').addEventListener('click', rollDice);
+
+    $('reroll-yes-btn').querySelector('.power-cost-num').textContent = POWERS.reroll.cost;
+    $('powers-reroll-cost').textContent = `${POWERS.reroll.cost} hearts`;
+    $('powers-btn').addEventListener('click', openPowers);
+    $('powers-done-btn').addEventListener('click', closePowers);
+    $('reroll-yes-btn').addEventListener('click', () => closeReroll(true));
+    $('reroll-no-btn').addEventListener('click', () => closeReroll(false));
     $('new-game-btn').addEventListener('click', () =>
       askConfirm(
         'Start a new game?',
@@ -2332,6 +2694,7 @@
     // — the question, surprise and win cards all need a decision.
     [
       ['ai-modal', () => $('ai-modal').classList.add('hidden')],
+      ['powers-modal', closePowers],
       ['confirm-modal', closeConfirm],
     ].forEach(([id, close]) => {
       $(id).addEventListener('click', (e) => {

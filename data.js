@@ -168,7 +168,10 @@ const BOARD_THEMES = {
   },
   night: {
     label: 'Night',
-    page: 'radial-gradient(1100px 620px at 50% -12%, #333c63 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #3a2a5c 0%, transparent 58%), linear-gradient(160deg, #1e2438 0%, #262040 52%, #1a2032 100%)',
+    // The one dark scene: white frost over it turns grey and unreadable, so the
+    // UI glass flips to a dark tint with light text (see [data-glass] in style.css).
+    glass: 'dark',
+    page:'radial-gradient(1100px 620px at 50% -12%, #333c63 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #3a2a5c 0%, transparent 58%), linear-gradient(160deg, #1e2438 0%, #262040 52%, #1a2032 100%)',
     pageBase: '#262040',
     boardBg: 'linear-gradient(155deg, #303858, #242a44)',
     frame: '#3c4468',
@@ -223,21 +226,21 @@ const MODES = {
   },
 };
 
-// `friendsLabel` / `friendsIcon` rename a theme in Friends mode where the
-// couples wording would be wrong. Everything else is shared.
+// `friendsLabel` renames a theme in Friends mode where the couples wording
+// would be wrong. `color` marks the topic's swatch on its chip and question card.
 const QUESTION_THEMES = {
-  general: { label: 'General', icon: '💬', color: '#3b7dd8' },
-  love: { label: 'Love', friendsLabel: 'Closeness', icon: '❤️', friendsIcon: '💛', color: '#d6336c' },
-  money: { label: 'Money', icon: '💰', color: '#2f9e5b' },
-  dreams: { label: 'Dreams', icon: '✨', color: '#8b5fbf' },
-  dare: { label: 'Fun & Dare', icon: '🎲', color: '#e08a2c' },
-  deep: { label: 'Deep Talk', icon: '🌙', color: '#2c7a7b' },
-  memories: { label: 'Memories', icon: '📸', color: '#b5763a' },
-  home: { label: 'Home & Family', icon: '🏡', color: '#4a7f9e' },
-  growth: { label: 'Growth', icon: '🌱', color: '#5c9e46' },
-  gratitude: { label: 'Gratitude', icon: '🙏', color: '#c2811f' },
-  adventure: { label: 'Adventure', icon: '🧭', color: '#3d8f8f' },
-  everyday: { label: 'Everyday', icon: '☕', color: '#8a6a9e' },
+  general: { label: 'General', color: '#3b7dd8' },
+  love: { label: 'Love', friendsLabel: 'Closeness', color: '#d6336c' },
+  money: { label: 'Money', color: '#2f9e5b' },
+  dreams: { label: 'Dreams', color: '#8b5fbf' },
+  dare: { label: 'Fun & Dare', color: '#e08a2c' },
+  deep: { label: 'Deep Talk', color: '#2c7a7b' },
+  memories: { label: 'Memories', color: '#b5763a' },
+  home: { label: 'Home & Family', color: '#4a7f9e' },
+  growth: { label: 'Growth', color: '#5c9e46' },
+  gratitude: { label: 'Gratitude', color: '#c2811f' },
+  adventure: { label: 'Adventure', color: '#3d8f8f' },
+  everyday: { label: 'Everyday', color: '#8a6a9e' },
 };
 
 // Each theme is `shared` (works for anyone at the table) plus one list per

@@ -73,23 +73,102 @@ repeat stays seamless. All of it is off under `prefers-reduced-motion`.
 
 Add a scene by copying an entry and changing the colours.
 
-Everything else recolours from two variables (`--rose` / `--rose-deep`), which
-`script.js` repoints on every new game; `--focus`, `--accent-wash` and
-`--overlay-tint` are derived from those with `color-mix()`, so most of the app
-re-skins with no per-theme rule.
+The UI chrome takes only one thing from the scene: its accent, via `--rose` /
+`--rose-deep`, which `script.js` repoints on every new game. Paper and ink are
+fixed across all six scenes.
 
 ## Interface conventions
 
-The scenes are the personality; the chrome is deliberately quiet.
+Designed with the Hallmark skill (`.claude/skills/hallmark`), editorial type
+system with frosted liquid-glass surfaces. The board is the object on the
+table; the UI is panes of frosted glass floating over the moving scene. The
+stamp at the top of `style.css` records the choices.
 
-- **One neutral elevation ramp** (`--lift-1/2/3`), never a coloured glow.
-- **Flat fills.** Only the board, pawns and dice look three-dimensional.
-- **The accent does three jobs**: primary action, active state, focus ring.
-- **Line icons at `currentColor`,** not emoji — emoji can't take the scene's
-  colour. Emoji survive only as content: player faces, topic tags, surprises.
-- **Left-aligned forms** with small-caps section labels.
+- **Glass is deliberate, and Hallmark bans it by default.** Every genre rules
+  out decorative glassmorphism; it's allowed where glass shows depth over
+  content, and every glass surface here floats over the live scene. Keep it to
+  surfaces that overlay something — don't add glass for looks.
+- **Tokens only.** Every colour and font in `style.css` comes from the `:root`
+  block (`--color-ink`, `--glass-panel`, `--font-display`, `--space-*`…). Add
+  a token rather than a one-off hex.
+- **Contrast is measured through the glass, not against a flat colour.** Text
+  sits on a tint composited over whatever the scene's photo texture is doing.
+  The numbers came from decoding each texture (`dwebp -ppm`), blurring it over
+  the area the frost mixes, and compositing the tint over its darkest patch:
+  - light frost, panels: 50% tint, muted text worst 4.54:1 (meadow)
+  - modals: 70% tint over a 28% veil, muted text 4.69:1
+  - control borders: 55% ink for 3:1
+  If you change a tint, an opacity or a texture, re-run that check.
+- **Night gets dark glass.** Its backdrop is nearly black, and white frost over
+  it turned muted text into 2.8:1 grey. `BOARD_THEMES.night.glass = 'dark'`
+  sets `data-glass="dark"` on `<html>`, which swaps the tokens: dark tint,
+  light text, bright accent. Any new dark scene needs the same flag.
+- **Some tokens must not flip.** The dice veil is dark and the die face light
+  in every scene, so `--color-veil`, `--color-on-veil`, `--color-die` and
+  `--color-pip` are fixed. Using `--color-ink` for pips made them vanish on
+  Night.
+- **No glass inside glass-blurred ancestors.** An element with
+  `backdrop-filter` becomes the backdrop root for its descendants, so a glass
+  card inside a blurred veil only frosts the veil. Modal backdrops and the
+  drawer veil are tint only; the frost lives on the card.
+- **Fallbacks.** `prefers-reduced-transparency` and browsers without
+  `backdrop-filter` get near-opaque panes.
+- **Square.** Controls are `--radius-control` (2px), panes `--radius-sheet`
+  (4px), the board 0. Hairline rules separate things, not cards inside cards.
+- **Primary actions are ink-filled and opaque**, so the main action never
+  depends on what the scene is doing behind it. The scene accent is a
+  highlighter: active marks, the heart icon, the ready ring on Roll.
+- **On light glass use `--rose-deep` (`--color-accent`), not `--rose`.** The
+  brighter accent falls under 3:1 on meadow and sunset even as a thin marker.
+  Dark glass uses `--rose`. Heart counts are ink; the accent stays on icons.
+- **Two faces.** Fraunces 700 for display (headings, questions, numerals),
+  Geist (variable) for everything else. Both self-hosted in `assets/fonts/`.
+  Headings are never italic.
+- **No emoji as UI icons.** Line icons at `currentColor` from the sprite in
+  `index.html`. Emoji survive only as content: player faces, surprise cards,
+  board ornaments. Topics are marked with a colour swatch, not an emoji.
+- **Clickable text never wraps.** Buttons and links are `white-space: nowrap`;
+  every touch target is at least 44px (small icons expand with `::before`).
+- **Hover styles live in `@media (hover: hover)`** so taps don't leave sticky
+  states, and no UI easing overshoots.
 - **No `window.confirm`.** Installed as a PWA it announces the origin in its
   title, which reads like a browser security warning rather than a game asking.
+
+Checked at 320, 375, 414 and 768px plus 1280×800 and a 926×428 landscape
+phone: no horizontal scroll, no wrapped labels, and the tilted board stays
+inside the screen. That last one is why the desktop board is `min(88vw, 78vh)`:
+at a 16° tilt the near edge projects ~7% wider than the layout box.
+
+## Heart powers
+
+Hearts come from answering (+3) and some surprises. The **Powers** button in
+the dock opens a sheet where the current player spends them before rolling:
+
+| Power | Cost | Effect |
+|---|---|---|
+| Re-roll | 3 | Not in the sheet. Offered only when a roll would land on a snake or overshoot 100. |
+| Shield | 5 | Blocks the next snake, however many turns later. |
+| Freeze | 6 | A chosen rival skips their next turn (uses `skipNext`). |
+| Boost | 8 | Adds 3 to the next roll, re-roll included. |
+| Loaded die | 10 | Pick the face (1–6) your next roll shows. No re-roll offer on it. |
+| Swap places | 15 | Trade squares with a chosen rival immediately. |
+
+Costs, names and descriptions live in `POWERS` in `script.js`, and every label
+is filled from there — change them in one place. `SHOP` sets the sheet order.
+
+- **Refunds:** Shield, Boost, Loaded die and Freeze can be cancelled for a full
+  refund until the dice are thrown (`armedThisTurn`); then they're committed.
+  Swap can't be refunded, because both pawns have already moved.
+- **Targets:** with one rival, Freeze and Swap act straight away; with more, the
+  row opens a picker. Freeze skips rivals already due to skip; Swap skips anyone
+  on your square.
+- **Stacking is allowed.** A loaded 4 with Boost moves 7.
+- A shield stops the pawn on the snake's head, and nothing further down a
+  ladder/snake chain applies. Shield isn't consulted by the `swapPositions` /
+  `joinPartner` surprises or by Swap, which move pawns directly rather than
+  through `movePlayerTo`.
+- Score chips show a shield icon for an active shield and a snowflake for
+  anyone due to skip a turn, whether frozen or from a surprise card.
 
 Two motion details worth knowing before you touch them:
 
