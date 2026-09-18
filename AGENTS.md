@@ -152,18 +152,33 @@ the dock opens a sheet where the current player spends them before rolling:
 | Rewind | 6 | Move a chosen rival back 5 squares immediately. |
 | Boost | 6 | Adds 3 to the next roll, re-roll included. |
 | Loaded die | 8 | Pick the face (1–6) your next roll shows. No re-roll offer on it. |
+| Encore | 12 | Take another full turn right after this one. |
 | Swap places | 20 | Trade squares with a chosen rival immediately. |
 
 Costs, names and descriptions live in `POWERS` in `script.js`, and every label
-is filled from there — change them in one place. `SHOP` sets the sheet order.
+is filled from there — change them in one place. `SHOP` sets the sheet order,
+which is also the ascending-cost order — a new power should slot in where its
+cost puts it.
 
-- **Refunds:** Shield, Boost, Loaded die and Freeze can be cancelled for a full
-  refund until the dice are thrown (`armedThisTurn`); then they're committed.
-  Rewind and Swap can't be refunded, because pawns have already moved.
+- **Refunds:** Shield, Boost, Loaded die, Encore and Freeze can be cancelled
+  for a full refund until the dice are thrown (`armedThisTurn`); then they're
+  committed. Rewind and Swap can't be refunded, because pawns have already
+  moved.
 - **Targets:** with one rival, Freeze, Rewind and Swap act straight away; with more, the
   row opens a picker. Freeze skips rivals already due to skip; Rewind skips anyone
   still on start (square 1); Swap skips anyone on your square.
 - **Stacking is allowed.** A loaded 4 with Boost moves 7.
+- **Encore is consumed later than the others.** Boost and Loaded die commit at
+  roll time and are spent by that same roll; Encore commits at roll time too
+  but isn't spent until the turn actually ends — `endTurn()` is the one place
+  every turn hands off to the next player (a normal landing, an overshoot with
+  no landing, or a surprise with no `extraTurn`), so it's the one place that
+  checks `player.encore` and, if set, clears it and re-renders for the same
+  player instead of calling `advanceTurn()`. It stacks with a free `extraTurn`
+  surprise rather than being consumed by it — that surprise's own bonus turn
+  goes through the `grantsExtraTurn` branch in `closeSurpriseModal`, which
+  skips `endTurn()` entirely, so Encore just stays queued for the next real
+  end of turn.
 - A shield stops the pawn on the snake's head, and nothing further down a
   ladder/snake chain applies. Shield isn't consulted by the `swapPositions` /
   `joinPartner` surprises or by Swap, which move pawns directly rather than

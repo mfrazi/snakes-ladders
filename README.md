@@ -22,9 +22,10 @@ square and you get a question or a surprise. Type an answer to keep it, or tap
 **Another** for a different question. First to land exactly on 100 wins.
 
 Answering earns hearts, and **Powers** lets you spend them before you roll:
-**Shield** (5) against your next snake, **Freeze** (6) a rival's next turn,
-**Boost** (8) your roll by 3, a **Loaded die** (10) to pick your roll, or
-**Swap places** (15) with a rival. A **Re-roll** (3) is offered when a roll
+**Shield** (4) against your next snake, **Freeze** (5) a rival's next turn,
+**Rewind** (6) a rival back 5 squares, **Boost** (6) your roll by 3, a
+**Loaded die** (8) to pick your roll, **Encore** (12) for a whole extra turn,
+or **Swap places** (20) with a rival. A **Re-roll** (2) is offered when a roll
 would land you on a snake or overshoot 100.
 
 The history drawer keeps every question and answer, and can download the lot as

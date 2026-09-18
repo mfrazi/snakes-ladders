@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-17b';
+  const BUILD = '2026-09-18';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -56,9 +56,13 @@
     rewind: { cost: 6, name: 'Rewind', icon: 'i-history', desc: 'Move a rival back 5 squares.', target: true },
     boost: { cost: 6, steps: 3, name: 'Boost +3', icon: 'i-bolt', desc: 'Adds 3 to your next roll.' },
     loaded: { cost: 8, name: 'Loaded die', icon: 'i-dice', desc: 'Choose what your next roll shows.', pick: true },
+    // Priced above Loaded die: it carries the same guaranteed-good-roll value
+    // plus a second full landing (movement and another question/surprise),
+    // so it needs to cost more than a single guaranteed roll.
+    encore: { cost: 12, name: 'Encore', icon: 'i-encore', desc: 'Take another turn right after this one.' },
     swap: { cost: 20, name: 'Swap places', icon: 'i-swap', desc: 'Trade squares with a rival, right now.', target: true },
   };
-  const SHOP = ['shield', 'freeze', 'rewind', 'boost', 'loaded', 'swap'];
+  const SHOP = ['shield', 'freeze', 'rewind', 'boost', 'loaded', 'encore', 'swap'];
 
   const $ = (id) => document.getElementById(id);
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -101,7 +105,7 @@
   let pickingPower = null;
 
   function freshArmed() {
-    return { shield: false, boost: false, loaded: false, freeze: null };
+    return { shield: false, boost: false, loaded: false, encore: false, freeze: null };
   }
   let pendingSurprise = null;
   let currentQuestion = null;
@@ -1566,6 +1570,7 @@
     if (me.shield) armed.push('Shield on');
     if (me.boost) armed.push(`Boost +${POWERS.boost.steps}`);
     if (me.loaded) armed.push(`Next roll ${me.loaded}`);
+    if (me.encore) armed.push('Encore queued');
     if (armedThisTurn.freeze !== null) armed.push(`${state.players[armedThisTurn.freeze].name} frozen`);
     $('powers-status').textContent = armed.join(' · ');
 
@@ -1626,6 +1631,7 @@
   function powerNote(kind, status) {
     const me = state.players[state.current];
     if (status === 'active' && kind === 'shield') return 'On until you meet a snake.';
+    if (status === 'active' && kind === 'encore') return 'Going again once this turn ends.';
     if (status === 'refundable' && kind === 'loaded') return `Your next roll will be a ${me.loaded}.`;
     if (status === 'refundable' && kind === 'freeze') {
       return `${state.players[armedThisTurn.freeze].name} skips their next turn.`;
@@ -1708,7 +1714,12 @@
 
     player[kind] = true;
     armedThisTurn[kind] = true;
-    spend(kind, kind === 'shield' ? `🛡️ ${player.name} raised a shield` : `⚡ ${player.name} boosted the next roll`);
+    const messages = {
+      shield: `🛡️ ${player.name} raised a shield`,
+      boost: `⚡ ${player.name} boosted the next roll`,
+      encore: `🔁 ${player.name} queued an encore`,
+    };
+    spend(kind, messages[kind]);
   }
 
   function buyLoaded(n) {
@@ -1909,7 +1920,7 @@
       turnBusy = false;
       saveState();
       renderAll();
-      advanceTurn();
+      endTurn();
       return;
     }
 
@@ -1957,6 +1968,23 @@
     }
     saveState();
     renderAll();
+  }
+
+  // Every place a turn would normally hand off to the next player goes
+  // through here instead of calling advanceTurn() directly, so Encore has one
+  // spot to consume itself. Unlike Boost or Loaded die — armed at roll time
+  // and spent by the roll — Encore is spent at the end of the turn, which is
+  // exactly what this function is.
+  function endTurn() {
+    const player = state.players[state.current];
+    if (player.encore) {
+      player.encore = false;
+      logMessage(`🔁 ${player.name} goes again`);
+      saveState();
+      renderAll();
+      return;
+    }
+    advanceTurn();
   }
 
   // ---------- Questions ----------
@@ -2084,7 +2112,7 @@
     $('question-modal').classList.add('hidden');
     saveState();
     renderAll();
-    advanceTurn();
+    endTurn();
   }
 
   // ---------- Surprises ----------
@@ -2109,7 +2137,7 @@
     if (grantsExtraTurn) {
       renderAll();
     } else {
-      advanceTurn();
+      endTurn();
     }
   }
 
