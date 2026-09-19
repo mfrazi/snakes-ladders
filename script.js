@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-18';
+  const BUILD = '2026-09-19';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -46,23 +46,29 @@
   // Beat between the pawn landing and the question appearing, so you get to
   // see where you actually landed before the modal takes over the screen.
   const LANDING_PAUSE_MS = REDUCED_MOTION ? 150 : 900;
+  // How long a charmed snake takes to fade off the board.
+  const CHARM_FADE_MS = 700;
 
   // Heart powers. An answered question pays 2, so a re-roll costs one answer.
-  // `target` powers act on a rival; `pick` powers ask for a number first.
+  // `target` powers ask what to act on first (a rival, or a snake); `pick`
+  // powers ask for a die face.
   const POWERS = {
     reroll: { cost: 2 },
     shield: { cost: 4, name: 'Shield', icon: 'i-shield', desc: 'Your next snake can’t drop you.' },
+    boost: { cost: 4, steps: 3, name: 'Boost +3', icon: 'i-bolt', desc: 'Adds 3 to your next roll.' },
     freeze: { cost: 5, name: 'Freeze', icon: 'i-snow', desc: 'A rival skips their next turn.', target: true },
     rewind: { cost: 6, name: 'Rewind', icon: 'i-history', desc: 'Move a rival back 5 squares.', target: true },
-    boost: { cost: 6, steps: 3, name: 'Boost +3', icon: 'i-bolt', desc: 'Adds 3 to your next roll.' },
+    heist: { cost: 8, take: 4, name: 'Heist', icon: 'i-mask', desc: 'Steal up to 4 hearts from a rival.', target: true },
     loaded: { cost: 8, name: 'Loaded die', icon: 'i-dice', desc: 'Choose what your next roll shows.', pick: true },
-    // Priced above Loaded die: it carries the same guaranteed-good-roll value
-    // plus a second full landing (movement and another question/surprise),
-    // so it needs to cost more than a single guaranteed roll.
-    encore: { cost: 12, name: 'Encore', icon: 'i-encore', desc: 'Take another turn right after this one.' },
+    charm: { cost: 13, name: 'Snake charmer', icon: 'i-charm', desc: 'Remove a snake ahead of you for good.', target: true },
     swap: { cost: 20, name: 'Swap places', icon: 'i-swap', desc: 'Trade squares with a rival, right now.', target: true },
   };
-  const SHOP = ['shield', 'freeze', 'rewind', 'boost', 'loaded', 'encore', 'swap'];
+  // Ascending cost, so a new power slots in where its price puts it.
+  const SHOP = ['shield', 'boost', 'freeze', 'rewind', 'heist', 'loaded', 'charm', 'swap'];
+  // A steal is capped by the price (8 for at most 4), so a thief always loses
+  // hearts by stealing and can't farm a rival. It also needs something worth
+  // taking — stealing one heart for eight is never a real choice.
+  const HEIST_MIN = 3;
 
   const $ = (id) => document.getElementById(id);
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -105,7 +111,7 @@
   let pickingPower = null;
 
   function freshArmed() {
-    return { shield: false, boost: false, loaded: false, encore: false, freeze: null };
+    return { shield: false, boost: false, loaded: false, freeze: null };
   }
   let pendingSurprise = null;
   let currentQuestion = null;
@@ -1004,7 +1010,7 @@
       spine.push(`${p.x} ${p.y}`);
     }
 
-    const group = svgEl('g', {});
+    const group = svgEl('g', { 'data-snake': from });
     group.appendChild(
       svgEl('path', {
         d: `M ${leftEdge.join(' L ')} L ${rightEdge.reverse().join(' L ')} Z`,
@@ -1536,29 +1542,34 @@
   }
 
   const rivals = () => otherIndexes();
-  const freezeTargets = () => rivals().filter((i) => !state.players[i].skipNext);
-  const swapTargets = () => {
-    const me = state.players[state.current];
-    return rivals().filter((i) => state.players[i].pos !== me.pos);
+  // Snake heads still in front of the current player, nearest first.
+  const snakesAhead = () =>
+    Object.keys(state.snakes)
+      .map(Number)
+      .filter((head) => head > state.players[state.current].pos)
+      .sort((a, b) => a - b);
+
+  // What each `target` power can act on right now: player indexes, or snake
+  // heads for the charmer. Empty means the power can't be bought at the moment.
+  const TARGETS = {
+    freeze: () => rivals().filter((i) => !state.players[i].skipNext),
+    rewind: () => rivals().filter((i) => state.players[i].pos > 1),
+    swap: () => rivals().filter((i) => state.players[i].pos !== state.players[state.current].pos),
+    heist: () => rivals().filter((i) => state.players[i].love >= HEIST_MIN),
+    charm: snakesAhead,
   };
-  const rewindTargets = () => rivals().filter((i) => state.players[i].pos > 1);
 
   // buyable · refundable (bought this turn, before rolling) · active (bought
   // earlier, now committed) · poor (can't afford) · none (no valid target)
   function powerState(kind) {
     const me = state.players[state.current];
-    const { cost } = POWERS[kind];
-    if (kind === 'freeze') {
-      if (armedThisTurn.freeze !== null) return 'refundable';
-      if (!freezeTargets().length) return 'none';
-    } else if (kind === 'swap') {
-      if (!swapTargets().length) return 'none';
-    } else if (kind === 'rewind') {
-      if (!rewindTargets().length) return 'none';
+    if (kind === 'freeze' && armedThisTurn.freeze !== null) return 'refundable';
+    if (TARGETS[kind]) {
+      if (!TARGETS[kind]().length) return 'none';
     } else if (me[kind]) {
       return armedThisTurn[kind] ? 'refundable' : 'active';
     }
-    return me.love >= cost ? 'buyable' : 'poor';
+    return me.love >= POWERS[kind].cost ? 'buyable' : 'poor';
   }
 
   function renderPowers() {
@@ -1570,7 +1581,6 @@
     if (me.shield) armed.push('Shield on');
     if (me.boost) armed.push(`Boost +${POWERS.boost.steps}`);
     if (me.loaded) armed.push(`Next roll ${me.loaded}`);
-    if (me.encore) armed.push('Encore queued');
     if (armedThisTurn.freeze !== null) armed.push(`${state.players[armedThisTurn.freeze].name} frozen`);
     $('powers-status').textContent = armed.join(' · ');
 
@@ -1628,17 +1638,22 @@
     }
   }
 
+  const NO_TARGET_NOTE = {
+    freeze: 'Every rival is already skipping a turn.',
+    rewind: 'No rivals have left the start.',
+    swap: 'Everyone is on your square.',
+    heist: `No rival has ${HEIST_MIN} hearts to steal.`,
+    charm: 'There are no snakes left ahead of you.',
+  };
+
   function powerNote(kind, status) {
     const me = state.players[state.current];
     if (status === 'active' && kind === 'shield') return 'On until you meet a snake.';
-    if (status === 'active' && kind === 'encore') return 'Going again once this turn ends.';
     if (status === 'refundable' && kind === 'loaded') return `Your next roll will be a ${me.loaded}.`;
     if (status === 'refundable' && kind === 'freeze') {
       return `${state.players[armedThisTurn.freeze].name} skips their next turn.`;
     }
-    if (status === 'none' && kind === 'freeze') return 'Every rival is already skipping a turn.';
-    if (status === 'none' && kind === 'swap') return 'Everyone is on your square.';
-    if (status === 'none' && kind === 'rewind') return 'No rivals have left the start.';
+    if (status === 'none') return NO_TARGET_NOTE[kind] || '';
     return '';
   }
 
@@ -1658,16 +1673,18 @@
 
     if (kind === 'loaded') {
       for (let n = 1; n <= 6; n++) add(String(n), `Roll a ${n}`, `pick-${n}`, () => buyLoaded(n));
+    } else if (kind === 'charm') {
+      snakesAhead().forEach((head) => {
+        const tail = state.snakes[head];
+        add(`${head} → ${tail}`, `Charm the snake on ${head}, which drops to ${tail}`, `snake-${head}`, () =>
+          buyCharm(head)
+        );
+      });
     } else {
-      const targets = kind === 'freeze' ? freezeTargets() : kind === 'rewind' ? rewindTargets() : swapTargets();
-      targets.forEach((i) => {
+      TARGETS[kind]().forEach((i) => {
         const p = state.players[i];
-        const where = (kind === 'swap' || kind === 'rewind') ? ` · ${p.pos}` : '';
-        add(`${p.emoji} ${p.name}${where}`, `${POWERS[kind].name}: ${p.name}`, `target-${i}`, () => {
-          if (kind === 'freeze') buyFreeze(i);
-          else if (kind === 'rewind') buyRewind(i);
-          else buySwap(i);
-        });
+        const detail = kind === 'heist' ? ` · ${p.love} hearts` : kind === 'freeze' ? '' : ` · ${p.pos}`;
+        add(`${p.emoji} ${p.name}${detail}`, `${POWERS[kind].name}: ${p.name}`, `target-${i}`, () => buyOn(kind, i));
       });
     }
     // The first choice takes focus so a keyboard user lands on the options.
@@ -1701,25 +1718,16 @@
       return renderPowerSheet();
     }
     if (POWERS[kind].target) {
-      const targets = kind === 'freeze' ? freezeTargets() : kind === 'rewind' ? rewindTargets() : swapTargets();
-      // With a single rival there's nothing to choose.
-      if (targets.length === 1) {
-        if (kind === 'freeze') return buyFreeze(targets[0]);
-        if (kind === 'rewind') return buyRewind(targets[0]);
-        return buySwap(targets[0]);
-      }
+      const targets = TARGETS[kind]();
+      // With one thing to act on there's nothing to choose.
+      if (targets.length === 1) return buyOn(kind, targets[0]);
       pickingPower = pickingPower === kind ? null : kind;
       return renderPowerSheet();
     }
 
     player[kind] = true;
     armedThisTurn[kind] = true;
-    const messages = {
-      shield: `🛡️ ${player.name} raised a shield`,
-      boost: `⚡ ${player.name} boosted the next roll`,
-      encore: `🔁 ${player.name} queued an encore`,
-    };
-    spend(kind, messages[kind]);
+    spend(kind, kind === 'shield' ? `🛡️ ${player.name} raised a shield` : `⚡ ${player.name} boosted the next roll`);
   }
 
   function buyLoaded(n) {
@@ -1730,8 +1738,54 @@
     spend('loaded', `🎯 ${player.name} loaded the die to ${n}`);
   }
 
+  function buyOn(kind, target) {
+    const buy = { freeze: buyFreeze, rewind: buyRewind, swap: buySwap, heist: buyHeist, charm: buyCharm }[kind];
+    return buy(target);
+  }
+
+  // The steal happens before spend() so the cost comes off the new total; it's
+  // immediate and can't be taken back, like the powers that move pawns.
+  function buyHeist(target) {
+    if (!canUsePowers() || powerState('heist') !== 'buyable' || !TARGETS.heist().includes(target)) return;
+    const player = state.players[state.current];
+    const other = state.players[target];
+    const take = Math.min(POWERS.heist.take, other.love);
+    other.love -= take;
+    player.love += take;
+    spend('heist', `💘 ${player.name} stole ${take} from ${other.name}`);
+  }
+
+  // Removing a snake changes the board for everyone, so it's permanent and
+  // can't be refunded. The snake leaves state before spend() saves, so a
+  // reload mid-fade doesn't bring it back.
+  async function buyCharm(head) {
+    if (!canUsePowers() || powerState('charm') !== 'buyable' || !snakesAhead().includes(head)) return;
+    const player = state.players[state.current];
+    delete state.snakes[head];
+    closePowers();
+    turnBusy = true;
+    animating = true;
+    spend('charm', `🐍 ${player.name} charmed the snake on ${head}`);
+    await fadeSnake(head);
+    animating = false;
+    turnBusy = false;
+    saveState();
+    renderAll();
+  }
+
+  async function fadeSnake(head) {
+    const group = document.querySelector(`#board-lines [data-snake="${head}"]`);
+    if (!group) return;
+    if (!REDUCED_MOTION) {
+      group.style.setProperty('--charm-ms', `${CHARM_FADE_MS}ms`);
+      group.classList.add('charmed');
+      await sleep(CHARM_FADE_MS);
+    }
+    group.remove();
+  }
+
   function buyFreeze(target) {
-    if (!canUsePowers() || powerState('freeze') !== 'buyable' || !freezeTargets().includes(target)) return;
+    if (!canUsePowers() || powerState('freeze') !== 'buyable' || !TARGETS.freeze().includes(target)) return;
     const player = state.players[state.current];
     state.players[target].skipNext = true;
     armedThisTurn.freeze = target;
@@ -1739,7 +1793,7 @@
   }
 
   async function buyRewind(target) {
-    if (!canUsePowers() || powerState('rewind') !== 'buyable' || !rewindTargets().includes(target)) return;
+    if (!canUsePowers() || powerState('rewind') !== 'buyable' || !TARGETS.rewind().includes(target)) return;
     const player = state.players[state.current];
     const other = state.players[target];
     closePowers();
@@ -1758,7 +1812,7 @@
   // Swap happens on the spot and isn't refundable — both pawns have already
   // moved. The sheet closes first so the trade is actually seen.
   async function buySwap(target) {
-    if (!canUsePowers() || powerState('swap') !== 'buyable' || !swapTargets().includes(target)) return;
+    if (!canUsePowers() || powerState('swap') !== 'buyable' || !TARGETS.swap().includes(target)) return;
     const player = state.players[state.current];
     const other = state.players[target];
     closePowers();
@@ -1920,7 +1974,7 @@
       turnBusy = false;
       saveState();
       renderAll();
-      endTurn();
+      advanceTurn();
       return;
     }
 
@@ -1968,23 +2022,6 @@
     }
     saveState();
     renderAll();
-  }
-
-  // Every place a turn would normally hand off to the next player goes
-  // through here instead of calling advanceTurn() directly, so Encore has one
-  // spot to consume itself. Unlike Boost or Loaded die — armed at roll time
-  // and spent by the roll — Encore is spent at the end of the turn, which is
-  // exactly what this function is.
-  function endTurn() {
-    const player = state.players[state.current];
-    if (player.encore) {
-      player.encore = false;
-      logMessage(`🔁 ${player.name} goes again`);
-      saveState();
-      renderAll();
-      return;
-    }
-    advanceTurn();
   }
 
   // ---------- Questions ----------
@@ -2112,7 +2149,7 @@
     $('question-modal').classList.add('hidden');
     saveState();
     renderAll();
-    endTurn();
+    advanceTurn();
   }
 
   // ---------- Surprises ----------
@@ -2137,7 +2174,7 @@
     if (grantsExtraTurn) {
       renderAll();
     } else {
-      endTurn();
+      advanceTurn();
     }
   }
 

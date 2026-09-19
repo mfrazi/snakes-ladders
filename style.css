@@ -1146,6 +1146,18 @@ button {
   filter: drop-shadow(0 2px 2px var(--color-shadow-line));
 }
 
+/* A charmed snake fades off the board. The duration is set from script.js
+   (CHARM_FADE_MS) so the fade and the wait for it can't drift apart. */
+#board-lines .charmed {
+  opacity: 0;
+  transform: scale(0.86);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    opacity var(--charm-ms) ease-out,
+    transform var(--charm-ms) ease-out;
+}
+
 /* ---------- Pawns ---------- */
 
 .token {

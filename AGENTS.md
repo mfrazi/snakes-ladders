@@ -148,43 +148,78 @@ the dock opens a sheet where the current player spends them before rolling:
 |---|---|---|
 | Re-roll | 2 | Not in the sheet. Offered only when a roll would land on a snake or overshoot 100. |
 | Shield | 4 | Blocks the next snake, however many turns later. |
+| Boost | 4 | Adds 3 to the next roll, re-roll included. |
 | Freeze | 5 | A chosen rival skips their next turn (uses `skipNext`). |
 | Rewind | 6 | Move a chosen rival back 5 squares immediately. |
-| Boost | 6 | Adds 3 to the next roll, re-roll included. |
+| Heist | 8 | Steal up to 4 hearts from a chosen rival. Needs a rival holding at least 3. |
 | Loaded die | 8 | Pick the face (1–6) your next roll shows. No re-roll offer on it. |
-| Encore | 12 | Take another full turn right after this one. |
+| Snake charmer | 13 | Remove a chosen snake ahead of you from the board, for everyone. |
 | Swap places | 20 | Trade squares with a chosen rival immediately. |
 
 Costs, names and descriptions live in `POWERS` in `script.js`, and every label
 is filled from there — change them in one place. `SHOP` sets the sheet order,
-which is also the ascending-cost order — a new power should slot in where its
-cost puts it.
+which is also ascending cost, so a new power slots in where its price puts it.
 
-- **Refunds:** Shield, Boost, Loaded die, Encore and Freeze can be cancelled
-  for a full refund until the dice are thrown (`armedThisTurn`); then they're
-  committed. Rewind and Swap can't be refunded, because pawns have already
-  moved.
-- **Targets:** with one rival, Freeze, Rewind and Swap act straight away; with more, the
-  row opens a picker. Freeze skips rivals already due to skip; Rewind skips anyone
-  still on start (square 1); Swap skips anyone on your square.
+- **Refunds:** Shield, Boost, Loaded die and Freeze can be cancelled for a full
+  refund until the dice are thrown (`armedThisTurn`); then they're committed.
+  Rewind, Swap, Heist and Snake charmer can't be refunded, because a pawn,
+  the hearts or the board have already changed.
+- **Targets** live in one table, `TARGETS` in `script.js`, which `powerState`,
+  the picker and every buy function read. With exactly one valid target a power
+  acts straight away; with more, the row opens a picker. Freeze skips rivals
+  already due to skip; Rewind skips anyone still on start (square 1); Swap skips
+  anyone on your square; Heist skips rivals under `HEIST_MIN` (3) hearts and
+  takes `min(4, their hearts)`; the charmer lists snakes whose head is past
+  your square. A new target power adds one line there and one to `buyOn`.
+- **Heist costs more than it takes** (8 for at most 4), on purpose. At 4 for 4
+  a player could strip a rival of everything they earn, every turn, for free.
+  At 8 for 4 both players lose the same 4 hearts, so it only pays against a
+  rival who is hoarding for something big.
+- **A charmed snake is gone for good.** It is deleted from `state.snakes`
+  *before* `spend()` saves, so a reload mid-fade can't bring it back, and its
+  `<g data-snake>` fades out over `CHARM_FADE_MS`. Ornaments are derived from
+  the layout, so after a reload a few can move onto the freed squares.
 - **Stacking is allowed.** A loaded 4 with Boost moves 7.
-- **Encore is consumed later than the others.** Boost and Loaded die commit at
-  roll time and are spent by that same roll; Encore commits at roll time too
-  but isn't spent until the turn actually ends — `endTurn()` is the one place
-  every turn hands off to the next player (a normal landing, an overshoot with
-  no landing, or a surprise with no `extraTurn`), so it's the one place that
-  checks `player.encore` and, if set, clears it and re-renders for the same
-  player instead of calling `advanceTurn()`. It stacks with a free `extraTurn`
-  surprise rather than being consumed by it — that surprise's own bonus turn
-  goes through the `grantsExtraTurn` branch in `closeSurpriseModal`, which
-  skips `endTurn()` entirely, so Encore just stays queued for the next real
-  end of turn.
 - A shield stops the pawn on the snake's head, and nothing further down a
   ladder/snake chain applies. Shield isn't consulted by the `swapPositions` /
   `joinPartner` surprises or by Swap, which move pawns directly rather than
   through `movePlayerTo`.
 - Score chips show a shield icon for an active shield and a snowflake for
   anyone due to skip a turn, whether frozen or from a surprise card.
+
+### Pricing a power
+
+Price by measured value, not by feel. The unit is **expected turns saved**:
+generate boards the way `generateBoard` does (7 ladders, 7 snakes, spans 8–26),
+value-iterate the expected turns to finish from every square, and compare with
+and without the power. Averaged over squares 1–95:
+
+| Power | Turns saved | Per heart |
+|---|---|---|
+| Shield | 4.96 | 1.24 |
+| Swap places | ~10 relative swing, only when behind | ~0.5 |
+| Re-roll | 0.70 | 0.35 |
+| Loaded die | 2.69 | 0.34 |
+| Rewind | 1.48 | 0.25 |
+| Freeze (2 players) | 1.00 | 0.20 |
+| Boost | 0.93 | 0.23 |
+| Snake charmer | 4.4 for you; net of a rival 1.3 if they lead by 15, 0 if level | 0–0.34 |
+| Heist | swing of 0 hearts (take 4, pay 8): denial only | ~0 |
+
+Most powers cluster at 0.2–0.35 turns per heart. **Shield is the outlier**:
+it saves about a whole snake slide (~17 squares) for the price of two answers,
+and is left as it was; if you retune, raise its price. Boost started at 6
+(0.16 per heart) and was lowered to 4.
+
+Two things that look fine and aren't:
+
+- **Check every power at 2 players as well as 3+.** An "extra turn" power
+  (Encore) was added and removed: with two players, "a rival skips a turn"
+  *is* an extra turn, so Freeze already did the same for less. Couples mode is
+  capped at 2, so that case decides.
+- **Don't add cheap "can't be targeted" defence.** The leader can always afford
+  it, and it switches off the trailing player's only comeback tools (Freeze,
+  Rewind, Swap) at the moment they matter.
 
 Two motion details worth knowing before you touch them:
 
