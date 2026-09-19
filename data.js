@@ -24,7 +24,7 @@ const BOARD_THEMES = {
     edge: ['#f0d9dd', '#e9cbd2', '#e0bac4', '#d5a7b4', '#c996a6'],
     dropShadow: 'rgba(120, 40, 80, 0.3)',
     ladder: { dark: '#a85f6d', light: '#f0b9a6', foot: '#d38f88' },
-    snake: { body: '#8b5a9c', outline: '#5d3569', belly: '#e2c2ec', head: '#7d4f8c' },
+    snake: { body: '#7d4e66', outline: '#3d2233', belly: '#ead5d6', head: '#6f4159' },
     accent: '#d6336c',
     accentDeep: '#a52551',
     pageTexture:
@@ -39,7 +39,7 @@ const BOARD_THEMES = {
     photoBoardSize: '180px',
     photoBoardOpacity: 0.14,
     motion: 'twinkle', driftAxis: 'xy', driftDuration: '95s', boardDriftDuration: '150s', twinkleDuration: '7s',
-    ornaments: ['💗', '✨', '🌸'],
+    ornaments: ['💗', '✨', '🌸', '🌹', '🎀', '🍓'],
     startIcon: '💌', finishIcon: '💍',
   },
   forest: {
@@ -55,7 +55,7 @@ const BOARD_THEMES = {
     edge: ['#d8e8cf', '#cbe0c0', '#bcd6b0', '#a9c99c', '#96bb88'],
     dropShadow: 'rgba(40, 80, 45, 0.32)',
     ladder: { dark: '#8a5a2b', light: '#dca868', foot: '#b07c3f' },
-    snake: { body: '#4f8f4a', outline: '#2f5c2c', belly: '#bfe0a8', head: '#437f3f' },
+    snake: { body: '#647d3f', outline: '#2c391b', belly: '#d3d9a4', head: '#586f37' },
     accent: '#3f8f4f',
     accentDeep: '#2c6b39',
     pageTexture:
@@ -70,7 +70,7 @@ const BOARD_THEMES = {
     photoBoardSize: '200px',
     photoBoardOpacity: 0.13,
     motion: 'drift', driftAxis: 'xy', driftDuration: '60s', boardDriftDuration: '110s',
-    ornaments: ['🍃', '🌲', '🍄'],
+    ornaments: ['🍃', '🌲', '🍄', '🌿', '🍂', '🐿️'],
     startIcon: '🌱', finishIcon: '🌳',
   },
   ocean: {
@@ -86,7 +86,7 @@ const BOARD_THEMES = {
     edge: ['#cfe4ef', '#bcd9e9', '#a8cde0', '#93bed4', '#7eb0c8'],
     dropShadow: 'rgba(20, 70, 100, 0.32)',
     ladder: { dark: '#9a7b45', light: '#e8cc95', foot: '#c2a068' },
-    snake: { body: '#2f8f9c', outline: '#1c5f6a', belly: '#a8e0e6', head: '#28808c' },
+    snake: { body: '#407b86', outline: '#1b414a', belly: '#c3dcd8', head: '#386d78' },
     accent: '#2b8ca6',
     accentDeep: '#1d6b80',
     pageTexture:
@@ -99,7 +99,7 @@ const BOARD_THEMES = {
     photoBoardSize: '190px',
     photoBoardOpacity: 0.15,
     motion: 'drift', driftAxis: 'x', driftDuration: '26s', boardDriftDuration: '38s',
-    ornaments: ['🐚', '⭐', '🫧'],
+    ornaments: ['🐚', '⭐', '🫧', '🐠', '🌊', '🦀'],
     startIcon: '⚓', finishIcon: '🏝️',
     cellTexture:
       "<svg xmlns='http://www.w3.org/2000/svg' width='40' height='20'><g stroke='#2f8f9c' stroke-opacity='0.1' stroke-width='1' fill='none' stroke-linecap='round'><path d='M0 10q10-6 20 0t20 0'/></g></svg>",
@@ -117,7 +117,7 @@ const BOARD_THEMES = {
     edge: ['#e0ecc8', '#d3e4b6', '#c4daa4', '#b3cf90', '#a2c47c'],
     dropShadow: 'rgba(70, 90, 30, 0.3)',
     ladder: { dark: '#9c7b3a', light: '#ebcf88', foot: '#c0a05a' },
-    snake: { body: '#7fa63c', outline: '#4f6b22', belly: '#dff0a8', head: '#71962f' },
+    snake: { body: '#8b9a3b', outline: '#474f1f', belly: '#e4e7aa', head: '#7e8d33' },
     accent: '#7ba337',
     accentDeep: '#5b7d26',
     pageTexture:
@@ -132,7 +132,7 @@ const BOARD_THEMES = {
     photoBoardSize: '175px',
     photoBoardOpacity: 0.14,
     motion: 'drift', driftAxis: 'x', driftDuration: '42s', boardDriftDuration: '70s',
-    ornaments: ['🌼', '🦋', '🌿'],
+    ornaments: ['🌼', '🦋', '🌿', '🐞', '🌾', '🌷'],
     startIcon: '🌻', finishIcon: '🐝',
   },
   sunset: {
@@ -148,7 +148,7 @@ const BOARD_THEMES = {
     edge: ['#f5d9c4', '#efcbb2', '#e7bb9e', '#dca786', '#cf9370'],
     dropShadow: 'rgba(130, 60, 40, 0.32)',
     ladder: { dark: '#9c5a30', light: '#f4bf8c', foot: '#c98b55' },
-    snake: { body: '#a44f7a', outline: '#6d2f52', belly: '#f0bcd8', head: '#94456d' },
+    snake: { body: '#a8683f', outline: '#54301e', belly: '#f1d4b3', head: '#985a30' },
     accent: '#e2703a',
     accentDeep: '#b4531f',
     pageTexture:
@@ -163,7 +163,7 @@ const BOARD_THEMES = {
     photoBoardSize: '195px',
     photoBoardOpacity: 0.14,
     motion: 'drift', driftAxis: 'x', driftDuration: '75s', boardDriftDuration: '120s',
-    ornaments: ['🌇', '🕊️', '☁️'],
+    ornaments: ['🌇', '🕊️', '☁️', '🌅', '🐦', '✨'],
     startIcon: '🌤️', finishIcon: '🌆',
   },
   night: {
@@ -182,7 +182,7 @@ const BOARD_THEMES = {
     edge: ['#262d4a', '#212843', '#1c223a', '#171d31', '#131828'],
     dropShadow: 'rgba(0, 0, 0, 0.55)',
     ladder: { dark: '#5f6890', light: '#cdd6f5', foot: '#98a1c8' },
-    snake: { body: '#7b5bd6', outline: '#452b93', belly: '#cbbcff', head: '#6d4fc4' },
+    snake: { body: '#5a639b', outline: '#20264c', belly: '#c8cef1', head: '#4f588d' },
     accent: '#8b6ee8',
     accentDeep: '#6a4fd0',
     pageTexture:
@@ -197,7 +197,7 @@ const BOARD_THEMES = {
     photoBoardSize: '210px',
     photoBoardOpacity: 0.20,
     motion: 'twinkle', driftAxis: 'x', driftDuration: '140s', boardDriftDuration: '190s', twinkleDuration: '4.5s',
-    ornaments: ['✨', '🌙', '⭐'],
+    ornaments: ['✨', '🌙', '⭐', '🦉', '🌌', '🔭'],
     startIcon: '🌠', finishIcon: '🌕',
   },
 };

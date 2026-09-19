@@ -73,6 +73,31 @@ repeat stays seamless. All of it is off under `prefers-reduced-motion`.
 
 Add a scene by copying an entry and changing the colours.
 
+**Ornaments.** `decorateBoard` scatters the scene's `ornaments` (six glyphs
+each) over roughly a third of the free squares, capped by `ORNAMENT_MAX`. A
+hash of the square number picks the squares and gives each its corner, size and
+tilt, so it looks scattered but a reloaded game shows the same board. They're
+desaturated and faint on purpose: a texture, not stickers. Start and finish
+flags are separate (`startIcon`, `finishIcon`).
+
+**Grain and trim.** `.board::before` is a static paper grain (an SVG noise
+tile; a light-speck version for the dark scene) and `.board::after` is a thin
+printed line with corner studs over the frame, coloured by `--cell-ink` through
+a CSS mask.
+
+**Snakes and ladders are drawn in `script.js`** (`drawSnake`, `drawLadder`),
+lit from the top left (`LIGHT`). They were flat shapes with a heavy outline,
+big white eyes and red tongues, which read as a cartoon; the fix was detail
+rather than colour. A snake is a stack of nested ribbons, each lighter and
+slid toward the light so the body looks round, then fish-scale texture, saddle
+markings and flank flecks, a glint along the back and only a thin dark edge.
+The head has slit-pupil eyes and nostrils. A ladder has lit and shaded rail
+edges, grain, a knot and nails where rungs meet rails. Both take their colours
+from the scene: keep `snake` palettes muted and natural (olive, copper, slate),
+not saturated. `snake.body` is the main tone, `outline` the darkest, `belly`
+the highlight. Each snake is tagged `data-snake` because the charmer fades it
+out by that tag.
+
 The UI chrome takes only one thing from the scene: its accent, via `--rose` /
 `--rose-deep`, which `script.js` repoints on every new game. Paper and ink are
 fixed across all six scenes.
@@ -103,10 +128,13 @@ stamp at the top of `style.css` records the choices.
   it turned muted text into 2.8:1 grey. `BOARD_THEMES.night.glass = 'dark'`
   sets `data-glass="dark"` on `<html>`, which swaps the tokens: dark tint,
   light text, bright accent. Any new dark scene needs the same flag.
-- **Some tokens must not flip.** The dice veil is dark and the die face light
-  in every scene, so `--color-veil`, `--color-on-veil`, `--color-die` and
-  `--color-pip` are fixed. Using `--color-ink` for pips made them vanish on
-  Night.
+- **The die is cut from the scene; the veil isn't.** The die takes the board
+  tile (`--die-face`), frame (`--die-edge`), cell texture (`--die-tex`) and
+  pips in the deep accent (`--die-pip`), all set in `applyBoardTheme`. On the
+  dark scene the pips use the light ladder tone, because the accent sinks into
+  the navy face. The veil behind it stays dark in every scene, so
+  `--color-veil` and `--color-on-veil` are fixed. `--color-die` and
+  `--color-pip` only cover the moment before the scene is applied.
 - **No glass inside glass-blurred ancestors.** An element with
   `backdrop-filter` becomes the backdrop root for its descendants, so a glass
   card inside a blurred veil only frosts the veil. Modal backdrops and the
@@ -133,6 +161,10 @@ stamp at the top of `style.css` records the choices.
   states, and no UI easing overshoots.
 - **No `window.confirm`.** Installed as a PWA it announces the origin in its
   title, which reads like a browser security warning rather than a game asking.
+
+The setup screen has no visible title or tagline: it opens straight onto the
+mode choice. The `<h1>` is still there, visually hidden, so the page keeps a
+heading for screen readers.
 
 Checked at 320, 375, 414 and 768px plus 1280×800 and a 926×428 landscape
 phone: no horizontal scroll, no wrapped labels, and the tilted board stays

@@ -15,8 +15,9 @@
 <link rel="stylesheet" href="style.css" />
 
 <!--
-  The <h1> is the LCP element and renders in this face. Preloading it means the
-  headline doesn't visibly swap from the fallback serif a beat after first paint.
+  The display face draws the player numbers on the setup screen, which is all
+  there is above the fold. Preloading it stops them swapping from the fallback
+  serif a beat after first paint.
 -->
 <link rel="preload" href="assets/fonts/fraunces-700.woff2" as="font" type="font/woff2" crossorigin />
 
@@ -279,10 +280,7 @@
 <!-- SETUP -->
 <section id="setup-screen" class="screen">
   <div class="setup-card">
-    <header class="setup-head">
-      <h1>Snakes &amp; Ladders</h1>
-      <p class="setup-sub">A board game about the people you're playing with.</p>
-    </header>
+    <h1 class="visually-hidden">Snakes &amp; Ladders</h1>
 
     <section class="field">
       <div class="field-head">

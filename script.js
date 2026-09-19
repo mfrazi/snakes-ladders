@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-19';
+  const BUILD = '2026-09-20';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -48,6 +48,8 @@
   const LANDING_PAUSE_MS = REDUCED_MOTION ? 150 : 900;
   // How long a charmed snake takes to fade off the board.
   const CHARM_FADE_MS = 700;
+  // Cap on scattered scene motifs, so a lucky hash can't crowd the board.
+  const ORNAMENT_MAX = 30;
 
   // Heart powers. An answered question pays 2, so a re-roll costs one answer.
   // `target` powers ask what to act on first (a rival, or a snake); `pick`
@@ -404,6 +406,12 @@
     root.setProperty('--cell-ink', theme.cellInk);
     root.setProperty('--rose', theme.accent);
     root.setProperty('--rose-deep', theme.accentDeep);
+    // The die is cut from the board: the same tile, frame and texture, with
+    // pips in the scene's deep accent (its light ladder tone on the dark scene,
+    // where the accent would sink into the face).
+    root.setProperty('--die-face', theme.cell);
+    root.setProperty('--die-edge', theme.frame);
+    root.setProperty('--die-pip', theme.glass === 'dark' ? theme.ladder.light : theme.accentDeep);
     document.documentElement.dataset.glass = theme.glass || 'light';
 
     // Installed as a PWA, this tints the OS status bar / title bar to match
@@ -466,6 +474,9 @@
     // Drifts one photo tile, on its own slower clock than the drawn detail —
     // the slight parallax is what stops it looking like flat wallpaper.
     run(photo, oneTile(`${theme.photoPageSize} ${theme.photoPageSize}`), theme.driftDuration);
+
+    document.documentElement.style.setProperty('--die-tex', url(theme.cellTexture));
+    document.documentElement.style.setProperty('--die-tex-size', theme.cellTextureSize);
 
     const board = document.querySelector('.board-texture');
     if (board) {
@@ -877,20 +888,26 @@
     const ornaments = theme.ornaments;
     if (!ornaments || !ornaments.length) return;
 
-    const free = CELL_ORDER.filter((num) => !taken.has(num));
-    const stride = Math.max(3, Math.floor(free.length / 9));
+    // A hash of the square number decides which cells get one and how it sits,
+    // so the scatter looks organic but a reloaded game shows the same board.
+    // Roughly a third of the free squares get a motif.
+    const hash = (num) => Math.imul(num * 2654435761, 1597334677) >>> 0;
+    const corners = ['br', 'bl', 'tr'];
     let placed = 0;
-    for (let i = 0; i < free.length && placed < 8; i += stride) {
-      const num = free[i];
+    CELL_ORDER.forEach((num) => {
+      if (taken.has(num) || placed >= ORNAMENT_MAX) return;
+      const h = hash(num);
+      if (h % 100 >= 34) return;
       const cell = cellEls[num];
-      if (!cell) continue;
+      if (!cell) return;
       const span = document.createElement('span');
-      span.className = 'cell-ornament';
-      span.textContent = ornaments[placed % ornaments.length];
-      span.style.setProperty('--orn-rot', `${((num * 37) % 40) - 20}deg`);
+      span.className = `cell-ornament orn-${corners[(h >>> 8) % corners.length]}`;
+      span.textContent = ornaments[(h >>> 12) % ornaments.length];
+      span.style.setProperty('--orn-rot', `${((h >>> 16) % 50) - 25}deg`);
+      span.style.setProperty('--orn-scale', (0.8 + ((h >>> 20) % 45) / 100).toFixed(2));
       cell.appendChild(span);
       placed++;
-    }
+    });
   }
 
   function svgEl(tag, attrs) {
@@ -906,6 +923,35 @@
 
   function buildConnections() {
     const svg = svgEl('svg', { id: 'board-lines', viewBox: '0 0 100 100', preserveAspectRatio: 'none' });
+
+    // Shared by every snake: a soft edge for the shading, and a fish-scale
+    // texture in the scene's own dark tone.
+    const defs = svgEl('defs', {});
+    const soft = svgEl('filter', { id: 'snake-soft', x: '-10%', y: '-10%', width: '120%', height: '120%' });
+    soft.appendChild(svgEl('feGaussianBlur', { stdDeviation: 0.16 }));
+    defs.appendChild(soft);
+    const scales = svgEl('pattern', {
+      id: 'snake-scales',
+      width: 0.9,
+      height: 0.9,
+      patternUnits: 'userSpaceOnUse',
+    });
+    [[0.45, 0.45], [0, 0], [0.9, 0], [0, 0.9], [0.9, 0.9]].forEach(([cx, cy]) => {
+      scales.appendChild(
+        svgEl('circle', {
+          cx,
+          cy,
+          r: 0.45,
+          fill: 'none',
+          stroke: boardTheme().snake.outline,
+          'stroke-opacity': 0.28,
+          'stroke-width': 0.06,
+        })
+      );
+    });
+    defs.appendChild(scales);
+    svg.appendChild(defs);
+
     Object.entries(state.ladders).forEach(([from, to]) => drawLadder(svg, Number(from), Number(to)));
     Object.entries(state.snakes).forEach(([from, to]) => drawSnake(svg, Number(from), Number(to)));
     return svg;
@@ -920,58 +966,139 @@
     return { a, b, dx, dy, len, px: -dy / len, py: dx / len };
   }
 
-  // Ladder styled from the active board theme, so it belongs to the scene.
+  // Both are drawn as if lit from the top left, which is also where the board's
+  // cast shadow falls away from.
+  const LIGHT = { x: -0.55, y: -0.83 };
+
+  const mixHex = (a, b, t) => {
+    const channel = (i) => {
+      const x = parseInt(a.slice(i, i + 2), 16);
+      const y = parseInt(b.slice(i, i + 2), 16);
+      return Math.round(x + (y - x) * t).toString(16).padStart(2, '0');
+    };
+    return `#${channel(1)}${channel(3)}${channel(5)}`;
+  };
+
+  // Wooden ladder lying on the board: two rails and rungs with a lit edge, a
+  // little grain and nailed joints, in the scene's own wood colours.
   function drawLadder(svg, from, to) {
     const { a, dx, dy, len, px, py } = geometry(from, to);
     const palette = boardTheme().ladder;
-    const rail = 1.7;
-    const group = svgEl('g', { fill: 'none', 'stroke-linecap': 'round' });
+    const ux = dx / len;
+    const uy = dy / len;
+    const half = 1.75; // middle of the ladder to the middle of a rail
+    const railW = 0.52;
+    const rungH = 0.3;
+    const dark = mixHex(palette.dark, '#000000', 0.32);
+    const group = svgEl('g', {});
 
-    const beam = (x1, y1, x2, y2, width, color) =>
-      group.appendChild(svgEl('line', { x1, y1, x2, y2, stroke: color, 'stroke-width': width }));
+    // A board from p to q, `w` wide either side of its centreline.
+    const board = (p, q, w, attrs) => {
+      const pts = [
+        [p.x + px * w, p.y + py * w],
+        [q.x + px * w, q.y + py * w],
+        [q.x - px * w, q.y - py * w],
+        [p.x - px * w, p.y - py * w],
+      ]
+        .map((c) => c.join(' '))
+        .join(' L ');
+      return svgEl('path', { d: `M ${pts} Z`, ...attrs });
+    };
+    const along = (t, side, offset = 0) => ({
+      x: a.x + dx * t + px * (half * side + offset),
+      y: a.y + dy * t + py * (half * side + offset),
+    });
+    const lightSide = Math.sign(px * LIGHT.x + py * LIGHT.y) || 1;
+    const lightAlong = Math.sign(ux * LIGHT.x + uy * LIGHT.y) || 1;
 
     const rungCount = Math.max(2, Math.round(len / 4.2));
+    for (let i = 1; i < rungCount; i++) {
+      const t = i / rungCount;
+      const c = { x: a.x + dx * t, y: a.y + dy * t };
+      const l = half + 0.05;
+      const rung = (offset, w, attrs) =>
+        group.appendChild(
+          svgEl('path', {
+            d:
+              `M ${c.x + px * l + ux * offset + ux * w} ${c.y + py * l + uy * offset + uy * w} ` +
+              `L ${c.x - px * l + ux * offset + ux * w} ${c.y - py * l + uy * offset + uy * w} ` +
+              `L ${c.x - px * l + ux * offset - ux * w} ${c.y - py * l + uy * offset - uy * w} ` +
+              `L ${c.x + px * l + ux * offset - ux * w} ${c.y + py * l + uy * offset - uy * w} Z`,
+            ...attrs,
+          })
+        );
+      rung(0, rungH, { fill: palette.light, stroke: dark, 'stroke-width': 0.1, 'stroke-linejoin': 'round' });
+      rung(lightAlong * (rungH - 0.1), 0.08, { fill: '#ffffff', 'fill-opacity': 0.4 });
+      rung(-lightAlong * (rungH - 0.09), 0.09, { fill: '#000000', 'fill-opacity': 0.14 });
+    }
 
-    for (let pass = 0; pass < 2; pass++) {
-      const width = pass === 0 ? 1.5 : 0.8;
-      const color = pass === 0 ? palette.dark : palette.light;
+    [1, -1].forEach((side) => {
+      const p = along(0, side);
+      const q = along(1, side);
+      group.appendChild(
+        board(p, q, railW, { fill: palette.dark, stroke: dark, 'stroke-width': 0.1, 'stroke-linejoin': 'round' })
+      );
+      // Lit edge and shaded edge, then two grain lines and a knot.
+      group.appendChild(
+        board(along(0, side, lightSide * 0.3), along(1, side, lightSide * 0.3), 0.13, {
+          fill: palette.light,
+          'fill-opacity': 0.55,
+        })
+      );
+      group.appendChild(
+        board(along(0, side, -lightSide * 0.36), along(1, side, -lightSide * 0.36), 0.1, {
+          fill: '#000000',
+          'fill-opacity': 0.16,
+        })
+      );
+      [-0.08, 0.14].forEach((off, k) => {
+        const grain = svgEl('line', {
+          x1: along(0.03 + k * 0.05, side, off).x,
+          y1: along(0.03 + k * 0.05, side, off).y,
+          x2: along(0.97 - k * 0.07, side, off).x,
+          y2: along(0.97 - k * 0.07, side, off).y,
+          stroke: '#000000',
+          'stroke-opacity': 0.2,
+          'stroke-width': 0.05,
+          'stroke-linecap': 'round',
+        });
+        group.appendChild(grain);
+      });
+      const knot = along(0.31 + (from % 5) * 0.09, side, 0.05);
+      group.appendChild(
+        svgEl('ellipse', {
+          cx: knot.x,
+          cy: knot.y,
+          rx: 0.28,
+          ry: 0.13,
+          fill: 'none',
+          stroke: '#000000',
+          'stroke-opacity': 0.24,
+          'stroke-width': 0.05,
+          transform: `rotate(${(Math.atan2(dy, dx) * 180) / Math.PI} ${knot.x} ${knot.y})`,
+        })
+      );
+    });
 
-      for (let i = 1; i < rungCount; i++) {
-        const t = i / rungCount;
-        const cx = a.x + dx * t;
-        const cy = a.y + dy * t;
-        beam(cx + px * rail, cy + py * rail, cx - px * rail, cy - py * rail, width * 0.85, color);
-      }
-
+    // A nail where each rung meets each rail.
+    for (let i = 1; i < rungCount; i++) {
       [1, -1].forEach((side) => {
-        beam(
-          a.x + px * rail * side,
-          a.y + py * rail * side,
-          a.x + dx + px * rail * side,
-          a.y + dy + py * rail * side,
-          width,
-          color
+        const n = along(i / rungCount, side);
+        group.appendChild(svgEl('circle', { cx: n.x, cy: n.y, r: 0.17, fill: '#241a12', 'fill-opacity': 0.65 }));
+        group.appendChild(
+          svgEl('circle', { cx: n.x - 0.05, cy: n.y - 0.06, r: 0.05, fill: '#ffffff', 'fill-opacity': 0.5 })
         );
       });
     }
 
-    [0, 1].forEach((t) => {
-      [1, -1].forEach((side) => {
-        group.appendChild(
-          svgEl('circle', {
-            cx: a.x + dx * t + px * rail * side,
-            cy: a.y + dy * t + py * rail * side,
-            r: 0.85,
-            fill: palette.foot,
-          })
-        );
-      });
-    });
-
     svg.appendChild(group);
   }
 
-  // Snake — tapered body, belly stripe, scales, head, tongue; themed colours.
+  // A snake seen from above: a body built from nested, progressively lighter
+  // ribbons (slid toward the light so it reads as round), scale texture, a
+  // saddle pattern and a proper head with slit-pupil eyes. There's no heavy
+  // outline — just a thin dark edge — which is most of what made the old one
+  // look like a cartoon.
   function drawSnake(svg, from, to) {
     const { a, dx, dy, len, px, py } = geometry(from, to);
     const palette = boardTheme().snake;
@@ -994,98 +1121,228 @@
       return { nx: -ty / mag, ny: tx / mag, tx: tx / mag, ty: ty / mag };
     };
 
-    const halfWidth = (t) => headWidth * (1 - t) ** 1.15 + 0.2;
+    // Slim at the neck, full through the middle, tapering over the last half.
+    const halfWidth = (t) => {
+      const neck = 0.8 + 0.2 * Math.min(1, t / 0.2);
+      const tail = t < 0.5 ? 1 : Math.max(0, 1 - ((t - 0.5) / 0.5) ** 1.2);
+      return headWidth * 0.92 * neck * tail + 0.18;
+    };
 
-    const SAMPLES = 60;
-    const leftEdge = [];
-    const rightEdge = [];
-    const spine = [];
+    const SAMPLES = 72;
+    const samples = [];
+    let spineLen = 0;
     for (let i = 0; i <= SAMPLES; i++) {
       const t = i / SAMPLES;
       const p = point(t);
       const { nx, ny } = normalAt(t);
-      const w = halfWidth(t);
-      leftEdge.push(`${p.x + nx * w} ${p.y + ny * w}`);
-      rightEdge.push(`${p.x - nx * w} ${p.y - ny * w}`);
-      spine.push(`${p.x} ${p.y}`);
+      if (i) spineLen += Math.hypot(p.x - samples[i - 1].p.x, p.y - samples[i - 1].p.y);
+      samples.push({ t, p, nx, ny, w: halfWidth(t), d: nx * LIGHT.x + ny * LIGHT.y });
     }
 
+    // The body outline scaled to `scale` of its width and slid `lift` toward
+    // the light: (1, 0) is the silhouette.
+    const ribbon = (scale, lift) => {
+      const left = [];
+      const right = [];
+      samples.forEach((s) => {
+        const c = s.d * lift * s.w;
+        const w = s.w * scale;
+        left.push(`${s.p.x + s.nx * (c + w)} ${s.p.y + s.ny * (c + w)}`);
+        right.push(`${s.p.x + s.nx * (c - w)} ${s.p.y + s.ny * (c - w)}`);
+      });
+      return `M ${left.join(' L ')} L ${right.reverse().join(' L ')} Z`;
+    };
+
     const group = svgEl('g', { 'data-snake': from });
+    const clipId = `snake-clip-${from}`;
+    const defs = svgEl('defs', {});
+    const clip = svgEl('clipPath', { id: clipId });
+    clip.appendChild(svgEl('path', { d: ribbon(1, 0) }));
+    defs.appendChild(clip);
+    group.appendChild(defs);
+
+    group.appendChild(svgEl('path', { d: ribbon(1, 0), fill: mixHex(palette.body, palette.outline, 0.5) }));
+
+    const shaded = svgEl('g', { 'clip-path': `url(#${clipId})`, filter: 'url(#snake-soft)' });
+    [
+      [0.86, mixHex(palette.body, palette.outline, 0.18)],
+      [0.66, palette.body],
+      [0.44, mixHex(palette.body, palette.belly, 0.3)],
+      [0.2, mixHex(palette.body, palette.belly, 0.55)],
+    ].forEach(([scale, color]) => {
+      shaded.appendChild(svgEl('path', { d: ribbon(scale, 0.6 * (1 - scale)), fill: color }));
+    });
+    group.appendChild(shaded);
+
+    const marks = svgEl('g', { 'clip-path': `url(#${clipId})` });
+    const saddles = Math.max(4, Math.floor(spineLen / (headWidth * 2.3)));
+    for (let i = 0; i < saddles; i++) {
+      const t = 0.14 + (0.8 * (i + 0.5)) / saddles;
+      const p = point(t);
+      const { tx, ty } = normalAt(t);
+      const w = halfWidth(t);
+      const angle = (Math.atan2(ty, tx) * 180) / Math.PI;
+      const rotate = (cx, cy) => `rotate(${angle} ${cx} ${cy})`;
+      marks.appendChild(
+        svgEl('ellipse', {
+          cx: p.x,
+          cy: p.y,
+          rx: w * 1.05,
+          ry: w * 0.62,
+          fill: palette.outline,
+          'fill-opacity': 0.5,
+          transform: rotate(p.x, p.y),
+        })
+      );
+      marks.appendChild(
+        svgEl('ellipse', {
+          cx: p.x,
+          cy: p.y,
+          rx: w * 0.52,
+          ry: w * 0.3,
+          fill: palette.belly,
+          'fill-opacity': 0.3,
+          transform: rotate(p.x, p.y),
+        })
+      );
+      // A fleck on the flank, alternating sides, halfway between the saddles.
+      const tf = Math.min(0.96, t + 0.4 / saddles);
+      const pf = point(tf);
+      const nf = normalAt(tf);
+      const wf = halfWidth(tf);
+      const side = i % 2 ? 1 : -1;
+      marks.appendChild(
+        svgEl('circle', {
+          cx: pf.x + nf.nx * wf * 0.78 * side,
+          cy: pf.y + nf.ny * wf * 0.78 * side,
+          r: wf * 0.2,
+          fill: palette.outline,
+          'fill-opacity': 0.4,
+        })
+      );
+    }
+    group.appendChild(marks);
+
+    group.appendChild(svgEl('path', { d: ribbon(1, 0), fill: 'url(#snake-scales)' }));
+
+    // A glint down the lit side of the back.
+    const glint = samples
+      .filter((s) => s.t > 0.08 && s.t < 0.9)
+      .map((s) => `${s.p.x + s.nx * s.d * 0.42 * s.w} ${s.p.y + s.ny * s.d * 0.42 * s.w}`);
     group.appendChild(
       svgEl('path', {
-        d: `M ${leftEdge.join(' L ')} L ${rightEdge.reverse().join(' L ')} Z`,
-        fill: palette.body,
-        stroke: palette.outline,
-        'stroke-width': 0.35,
+        d: `M ${glint.join(' L ')}`,
+        fill: 'none',
+        stroke: palette.belly,
+        'stroke-opacity': 0.32,
+        'stroke-width': 0.16,
+        'stroke-linecap': 'round',
         'stroke-linejoin': 'round',
       })
     );
     group.appendChild(
       svgEl('path', {
-        d: `M ${spine.join(' L ')}`,
+        d: ribbon(1, 0),
         fill: 'none',
-        stroke: palette.belly,
-        'stroke-width': 0.45,
-        'stroke-opacity': 0.6,
-        'stroke-linecap': 'round',
+        stroke: palette.outline,
+        'stroke-opacity': 0.75,
+        'stroke-width': 0.16,
+        'stroke-linejoin': 'round',
       })
     );
 
-    for (let i = 2; i < 12; i++) {
-      const t = i / 13;
-      const p = point(t);
-      const { nx, ny } = normalAt(t);
-      const w = halfWidth(t) * 0.78;
-      group.appendChild(
-        svgEl('line', {
-          x1: p.x + nx * w,
-          y1: p.y + ny * w,
-          x2: p.x - nx * w,
-          y2: p.y - ny * w,
-          stroke: palette.outline,
-          'stroke-width': 0.28,
-          'stroke-opacity': 0.4,
-          'stroke-linecap': 'round',
-        })
-      );
-    }
-
+    // ---- Head. Drawn in a frame that points away from the body, in units of
+    // the neck's half width.
+    const hw0 = halfWidth(0);
     const head = point(0);
     const { tx, ty, nx, ny } = normalAt(0);
+    const fx = -tx;
+    const fy = -ty;
+    const at = (u, v) => ({
+      x: head.x + fx * u * hw0 + nx * v * hw0,
+      y: head.y + fy * u * hw0 + ny * v * hw0,
+    });
+    const H = (u, v) => {
+      const p = at(u, v);
+      return `${p.x} ${p.y}`;
+    };
+    const headPath =
+      `M ${H(-0.4, 0.95)} C ${H(0.3, 1.05)} ${H(0.8, 1.4)} ${H(1.4, 1.3)} ` +
+      `C ${H(2.0, 1.2)} ${H(2.5, 0.78)} ${H(3.0, 0.44)} ` +
+      `C ${H(3.3, 0.3)} ${H(3.3, -0.3)} ${H(3.0, -0.44)} ` +
+      `C ${H(2.5, -0.78)} ${H(2.0, -1.2)} ${H(1.4, -1.3)} ` +
+      `C ${H(0.8, -1.4)} ${H(0.3, -1.05)} ${H(-0.4, -0.95)} Z`;
+    const heading = (Math.atan2(fy, fx) * 180) / Math.PI;
+
+    // Tongue first, so the snout sits over its root.
     group.appendChild(
+      svgEl('path', {
+        d:
+          `M ${H(3.2, 0)} Q ${H(3.8, 0.12)} ${H(4.05, 0.04)} ` +
+          `M ${H(4.05, 0.04)} L ${H(4.5, 0.34)} M ${H(4.05, 0.04)} L ${H(4.45, -0.26)}`,
+        fill: 'none',
+        stroke: '#7c2a35',
+        'stroke-opacity': 0.9,
+        'stroke-width': 0.11,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+      })
+    );
+    group.appendChild(svgEl('path', { d: headPath, fill: mixHex(palette.head, palette.outline, 0.12) }));
+
+    const headShade = svgEl('g', { 'clip-path': `url(#${clipId}-head)`, filter: 'url(#snake-soft)' });
+    const headClip = svgEl('clipPath', { id: `${clipId}-head` });
+    headClip.appendChild(svgEl('path', { d: headPath }));
+    defs.appendChild(headClip);
+    const lit = nx * LIGHT.x + ny * LIGHT.y;
+    const glow = at(1.6, lit * 0.5);
+    headShade.appendChild(
       svgEl('ellipse', {
-        cx: head.x,
-        cy: head.y,
-        rx: headWidth * 1.25,
-        ry: headWidth * 0.95,
-        fill: palette.head,
+        cx: glow.x,
+        cy: glow.y,
+        rx: hw0 * 1.15,
+        ry: hw0 * 0.55,
+        fill: mixHex(palette.head, palette.belly, 0.45),
+        'fill-opacity': 0.75,
+        transform: `rotate(${heading} ${glow.x} ${glow.y})`,
+      })
+    );
+    headShade.appendChild(
+      svgEl('path', {
+        d: `M ${H(0.5, 0)} L ${H(1.3, 0.5)} L ${H(2.4, 0.22)} L ${H(2.7, 0)} L ${H(2.4, -0.22)} L ${H(1.3, -0.5)} Z`,
+        fill: palette.outline,
+        'fill-opacity': 0.3,
+      })
+    );
+    group.appendChild(headShade);
+    group.appendChild(svgEl('path', { d: headPath, fill: 'url(#snake-scales)', 'fill-opacity': 0.8 }));
+    group.appendChild(
+      svgEl('path', {
+        d: headPath,
+        fill: 'none',
         stroke: palette.outline,
-        'stroke-width': 0.35,
-        transform: `rotate(${(Math.atan2(ty, tx) * 180) / Math.PI} ${head.x} ${head.y})`,
+        'stroke-opacity': 0.8,
+        'stroke-width': 0.16,
+        'stroke-linejoin': 'round',
       })
     );
 
-    const tipX = head.x - tx * headWidth * 2.1;
-    const tipY = head.y - ty * headWidth * 2.1;
-    [0.45, -0.45].forEach((side) => {
+    [1, -1].forEach((side) => {
+      const eye = at(1.85, side * 0.82);
+      group.appendChild(svgEl('circle', { cx: eye.x, cy: eye.y, r: hw0 * 0.3, fill: '#c9963a', stroke: '#2b1d10', 'stroke-width': 0.05, 'stroke-opacity': 0.8 }));
       group.appendChild(
-        svgEl('line', {
-          x1: head.x - tx * headWidth * 1.2,
-          y1: head.y - ty * headWidth * 1.2,
-          x2: tipX + nx * side,
-          y2: tipY + ny * side,
-          stroke: '#e0455f',
-          'stroke-width': 0.3,
-          'stroke-linecap': 'round',
+        svgEl('ellipse', {
+          cx: eye.x,
+          cy: eye.y,
+          rx: hw0 * 0.24,
+          ry: hw0 * 0.07,
+          fill: '#150e08',
+          transform: `rotate(${heading} ${eye.x} ${eye.y})`,
         })
       );
-    });
-
-    [1, -1].forEach((side) => {
-      const ex = head.x + nx * headWidth * 0.45 * side - tx * headWidth * 0.1;
-      const ey = head.y + ny * headWidth * 0.45 * side - ty * headWidth * 0.1;
-      group.appendChild(svgEl('circle', { cx: ex, cy: ey, r: headWidth * 0.3, fill: '#fffdf5' }));
-      group.appendChild(svgEl('circle', { cx: ex, cy: ey, r: headWidth * 0.14, fill: '#2c1f33' }));
+      group.appendChild(svgEl('circle', { cx: eye.x - 0.09, cy: eye.y - 0.11, r: hw0 * 0.06, fill: '#ffffff', 'fill-opacity': 0.8 }));
+      const nostril = at(2.85, side * 0.17);
+      group.appendChild(svgEl('circle', { cx: nostril.x, cy: nostril.y, r: hw0 * 0.05, fill: '#150e08', 'fill-opacity': 0.7 }));
     });
 
     svg.appendChild(group);

@@ -40,8 +40,12 @@
   --color-paper: oklch(97.8% 0.008 85);
   --color-error: oklch(52% 0.18 25);
 
-  /* Fixed whatever the glass mode: the dice veil and the die are dark and
-     light respectively in every scene, so what sits on them can't flip. */
+  /* The dice veil is dark in every scene, so what sits on it can't flip. The
+     die itself is cut from the scene (--die-face, --die-edge, --die-pip, set
+     in script.js); --color-die and --color-pip only cover the moment before
+     that runs. */
+  --board-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .26 0 0 0 0 .24 0 0 0 .8 -.26'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --board-trim: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Crect x='.55' y='.55' width='98.9' height='98.9' fill='none' stroke='%23000' stroke-width='.18'/%3E%3Cg fill='%23000'%3E%3Ccircle cx='.55' cy='.55' r='.6'/%3E%3Ccircle cx='99.45' cy='.55' r='.6'/%3E%3Ccircle cx='.55' cy='99.45' r='.6'/%3E%3Ccircle cx='99.45' cy='99.45' r='.6'/%3E%3C/g%3E%3C/svg%3E");
   --color-veil: oklch(22% 0.014 51);
   --color-on-veil: oklch(97% 0.008 85);
   --color-die: oklch(98.6% 0.006 85);
@@ -144,6 +148,7 @@
    leaves light muted text at 5.5:1. */
 :root[data-glass='dark'] {
   color-scheme: dark;
+  --board-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .75 0 0 0 0 .8 0 0 0 0 1 0 0 0 .7 -.3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
   --color-ink: oklch(96% 0.011 303);
   --color-ink-2: oklch(86.9% 0.021 301);
   --color-muted: oklch(72.9% 0.035 299);
@@ -356,27 +361,6 @@ button {
     opacity: 0;
     transform: translateY(12px);
   }
-}
-
-.setup-head {
-  padding-bottom: var(--space-md);
-  border-bottom: 1px solid var(--color-ink);
-}
-
-.setup-head h1 {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(1.875rem, 1.25rem + 2.4vw, 2.5rem);
-  line-height: 1.04;
-  letter-spacing: -0.02em;
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-
-.setup-sub {
-  margin-top: var(--space-xs);
-  max-width: 34ch;
-  color: var(--color-muted);
 }
 
 .field {
@@ -1019,19 +1003,57 @@ button {
   opacity: 0.7;
 }
 
-/* The scene's own motifs on a few empty cells, kept small and faint so they
-   read as texture rather than stickers. */
+/* The scene's own motifs scattered over the empty cells. Corner, size and tilt
+   vary per cell (set in decorateBoard) and the colour is pulled back, so they
+   read as printed pattern rather than stickers. */
 .cell-ornament {
   position: absolute;
-  right: 1px;
-  bottom: 0;
   z-index: 1;
-  font-size: clamp(6px, 1.4vw, 11px);
+  font-size: calc(clamp(7px, 1.7vw, 13px) * var(--orn-scale, 1));
   line-height: 1;
-  opacity: 0.32;
+  opacity: 0.5;
+  filter: saturate(0.7);
   transform: rotate(var(--orn-rot, 0deg));
   pointer-events: none;
   user-select: none;
+}
+
+.orn-br {
+  right: 1px;
+  bottom: 0;
+}
+
+.orn-bl {
+  left: 2px;
+  bottom: 0;
+}
+
+.orn-tr {
+  right: 1px;
+  top: 1px;
+}
+
+/* Paper grain over the whole playing surface, and a printed line and brass
+   studs on the frame. Both are static; only the two texture layers drift. */
+.board::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background-image: var(--board-grain);
+  pointer-events: none;
+}
+
+.board::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  z-index: 1;
+  background: var(--cell-ink);
+  opacity: 0.55;
+  pointer-events: none;
+  -webkit-mask: var(--board-trim) center / 100% 100% no-repeat;
+  mask: var(--board-trim) center / 100% 100% no-repeat;
 }
 
 .cell-flag {
@@ -1653,9 +1675,12 @@ button {
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
   padding: calc(var(--die) * 0.13);
-  border: 1px solid color-mix(in oklch, var(--color-pip) 10%, transparent);
+  border: calc(var(--die) * 0.03) solid var(--die-edge, var(--color-die));
   border-radius: calc(var(--die) * 0.08);
-  background: var(--color-die);
+  background:
+    var(--die-tex, none) 0 0 / var(--die-tex-size, auto),
+    var(--die-face, var(--color-die));
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--die-pip, var(--color-pip)) 16%, transparent);
 }
 
 .die-face.face-1 {
@@ -1683,7 +1708,8 @@ button {
   width: calc(var(--die) * 0.16);
   height: calc(var(--die) * 0.16);
   border-radius: 50%;
-  background: var(--color-pip);
+  background: var(--die-pip, var(--color-pip));
+  box-shadow: inset 0 calc(var(--die) * -0.01) calc(var(--die) * 0.014) rgb(0 0 0 / 0.28);
 }
 
 .dice-shadow {
