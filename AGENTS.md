@@ -171,6 +171,25 @@ phone: no horizontal scroll, no wrapped labels, and the tilted board stays
 inside the screen. That last one is why the desktop board is `min(88vw, 78vh)`:
 at a 16° tilt the near edge projects ~7% wider than the layout box.
 
+## Installing the app
+
+`initInstall()` in `script.js` holds Chrome's `beforeinstallprompt` event
+(calling `preventDefault()` also suppresses Chrome's own bottom infobar) and
+offers it two ways: the "Install app" link on the setup screen, and, on Android
+only, a banner pinned to the top with the app's name and an Install button
+(`#install-banner`). Both go through `promptInstall()`, which must call
+`prompt()` before its first `await` or the tap no longer counts as a user
+gesture. Closing the banner is remembered for 14 days
+(`snakeLoveInstallDismissed_v1`); the link is always there. The banner is
+Android-only on purpose: desktop Chrome puts an install icon in the address
+bar, and iOS never fires the event.
+
+To test it, the embedded browser won't fire a real event, so dispatch one from
+the console with the mobile viewport on (any width under 768px reports an
+Android user agent): `const e = new Event('beforeinstallprompt', {cancelable:
+true}); e.prompt = () => Promise.resolve(); e.userChoice =
+Promise.resolve({outcome: 'accepted'}); dispatchEvent(e)`.
+
 ## Heart powers
 
 Hearts come from answering (+2) and some surprises. The **Powers** button in

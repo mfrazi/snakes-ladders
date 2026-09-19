@@ -543,6 +543,24 @@
 </div>
 
 <!-- INSTALL (iOS only — every other browser gets the native prompt instead) -->
+<!--
+  Install prompt, pinned to the top. Chrome on Android has no automatic prompt
+  once a page cancels beforeinstallprompt (and this page has to, to keep the
+  event), so script.js shows this instead when the event arrives. See
+  initInstall().
+-->
+<aside id="install-banner" class="install-banner hidden" aria-label="Install app">
+  <img class="install-banner-icon" src="icons/icon-192.png" alt="" width="40" height="40" />
+  <div class="install-banner-text">
+    <p class="install-banner-name">Snakes &amp; Ladders</p>
+    <p class="install-banner-sub">Works offline</p>
+  </div>
+  <button type="button" id="install-banner-btn" class="primary-btn">Install</button>
+  <button type="button" id="install-banner-close" class="icon-btn" aria-label="Not now">
+    <svg class="icon"><use href="#i-close" /></svg>
+  </button>
+</aside>
+
 <div id="install-modal" class="modal-backdrop hidden">
   <div class="modal-box">
     <h2 class="modal-title" id="install-title">Install this app</h2>

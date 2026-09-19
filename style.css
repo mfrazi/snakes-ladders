@@ -121,6 +121,7 @@
   --z-photo: -2;
   --z-pop: 80;
   --z-dice: 60;
+  --z-banner: 55;
   --z-drawer: 65;
   --z-modal: 70;
   --z-confetti: 90;
@@ -254,7 +255,8 @@ button {
 .modal-box,
 .log-panel,
 .score-card,
-.header-tools {
+.header-tools,
+.install-banner {
   background-color: var(--glass-panel);
   background-image: linear-gradient(155deg, var(--glass-sheen), transparent 55%);
   -webkit-backdrop-filter: var(--glass-filter);
@@ -792,6 +794,70 @@ button {
 .icon-btn:active {
   transform: translateY(1px);
   background: var(--glass-fill-active);
+}
+
+/* ---------- Install banner ---------- */
+/* Pinned to the top so it's the first thing seen, clear of the notch, and
+   below the dice, drawer and modals so it never covers a decision. */
+.install-banner {
+  position: fixed;
+  top: max(var(--space-xs), env(safe-area-inset-top));
+  left: var(--space-xs);
+  right: var(--space-xs);
+  z-index: var(--z-banner);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  max-width: 480px;
+  margin-inline: auto;
+  padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sheet);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-glass);
+  animation: bannerIn 0.4s var(--ease-out);
+}
+
+@keyframes bannerIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+.install-banner-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+}
+
+.install-banner-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.install-banner-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-md);
+  line-height: 1.15;
+}
+
+.install-banner-sub {
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  line-height: 1.3;
+  color: var(--color-muted);
+}
+
+.install-banner .primary-btn {
+  min-height: 44px;
+  padding: 0 var(--space-md);
+  font-size: var(--text-sm);
+}
+
+.install-banner .icon-btn {
+  width: 44px;
+  height: 44px;
 }
 
 /* ---------- Game shell ---------- */
@@ -2282,6 +2348,7 @@ button {
   .chip-btn.cycled,
   .win-row,
   .modal-box,
+  .install-banner,
   .turn-banner.swap,
   .modal-question.question-swap,
   .modal-question.loading,

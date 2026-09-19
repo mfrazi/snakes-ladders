@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-20';
+  const BUILD = '2026-09-20b';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -2909,6 +2909,13 @@
   // there is instructions.
   let installPrompt = null;
 
+  // The banner is only for Android, where the install event fires on load and
+  // the address bar has no install icon to fall back on. Desktop browsers show
+  // one of their own, and iOS never fires the event. A dismissal is remembered
+  // for two weeks so it doesn't nag; the setup screen's link is always there.
+  const INSTALL_DISMISS_KEY = 'snakeLoveInstallDismissed_v1';
+  const INSTALL_DISMISS_DAYS = 14;
+
   function isIos() {
     // iPadOS 13+ reports itself as a Mac, so the touch check is what
     // separates an iPad from a desktop Safari that genuinely can install.
@@ -2934,18 +2941,53 @@
     // again is noise.
     if (isStandalone()) return;
 
+    const banner = $('install-banner');
+    const dismissedRecently = () => {
+      try {
+        const at = Number(localStorage.getItem(INSTALL_DISMISS_KEY));
+        return Boolean(at) && Date.now() - at < INSTALL_DISMISS_DAYS * 86400000;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    // prompt() has to run inside the user's tap, so it's called before the
+    // first await. The event is single-use whatever the answer: a dismissed
+    // prompt can't be re-shown, and Chrome fires a fresh one on a later visit.
+    async function promptInstall() {
+      if (!installPrompt) return false;
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt = null;
+      btn.classList.add('hidden');
+      banner.classList.add('hidden');
+      return true;
+    }
+
     window.addEventListener('beforeinstallprompt', (e) => {
-      // Chrome/Edge: suppress the browser's own mini-infobar so this button
-      // is the single install entry point, then keep the event — it can only
-      // be used once, and only from a real user gesture.
+      // Chrome/Edge: hold the event instead of letting the browser show its
+      // own bottom infobar, so the prompt can come from here, at the top, with
+      // the app's name on it. It can only be used from a real user gesture.
       e.preventDefault();
       installPrompt = e;
       btn.classList.remove('hidden');
+      if (/android/i.test(navigator.userAgent) && !dismissedRecently()) banner.classList.remove('hidden');
     });
 
     window.addEventListener('appinstalled', () => {
       installPrompt = null;
       btn.classList.add('hidden');
+      banner.classList.add('hidden');
+    });
+
+    $('install-banner-btn').addEventListener('click', promptInstall);
+    $('install-banner-close').addEventListener('click', () => {
+      banner.classList.add('hidden');
+      try {
+        localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now()));
+      } catch (e) {
+        /* storage unavailable */
+      }
     });
 
     if (isIos()) {
@@ -2955,15 +2997,7 @@
     }
 
     btn.addEventListener('click', async () => {
-      if (installPrompt) {
-        installPrompt.prompt();
-        await installPrompt.userChoice;
-        // Consumed either way: a dismissed prompt can't be re-shown with the
-        // same event, and Chrome fires a fresh one if the user comes back.
-        installPrompt = null;
-        btn.classList.add('hidden');
-        return;
-      }
+      if (await promptInstall()) return;
       // Name the actual device — an iPad user told to look on their "iPhone"
       // reasonably wonders whether these are the right instructions at all.
       const ipad = /ipad/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
