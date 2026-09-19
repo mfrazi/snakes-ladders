@@ -173,22 +173,32 @@ at a 16° tilt the near edge projects ~7% wider than the layout box.
 
 ## Installing the app
 
-`initInstall()` in `script.js` holds Chrome's `beforeinstallprompt` event
-(calling `preventDefault()` also suppresses Chrome's own bottom infobar) and
-offers it two ways: the "Install app" link on the setup screen, and, on Android
-only, a banner pinned to the top with the app's name and an Install button
-(`#install-banner`). Both go through `promptInstall()`, which must call
-`prompt()` before its first `await` or the tap no longer counts as a user
-gesture. Closing the banner is remembered for 14 days
-(`snakeLoveInstallDismissed_v1`); the link is always there. The banner is
-Android-only on purpose: desktop Chrome puts an install icon in the address
-bar, and iOS never fires the event.
+`initInstall()` in `script.js` decides who asks the player to install.
 
-To test it, the embedded browser won't fire a real event, so dispatch one from
-the console with the mobile viewport on (any width under 768px reports an
-Android user agent): `const e = new Event('beforeinstallprompt', {cancelable:
-true}); e.prompt = () => Promise.resolve(); e.userChoice =
-Promise.resolve({outcome: 'accepted'}); dispatchEvent(e)`.
+- **Android:** Chrome does, with its own prompt (name, icon, the manifest's
+  screenshots). That only happens if the page *doesn't* cancel
+  `beforeinstallprompt`, so on Android the event is left uncancelled. Cancelling
+  it is what suppressed the prompt, and it's why nothing appeared until the
+  player found the "Install app" link. Chrome owns the timing and the position
+  (usually a bar at the bottom), and stays quiet for a while after someone
+  dismisses it. The page can't force, move or restyle it.
+- **Elsewhere:** the event is cancelled and held for the setup screen's link,
+  the documented pattern. Desktop Chrome has an address-bar icon and shows no
+  prompt of its own.
+- **The link** calls `prompt()` on the held event. If Chrome refuses (undefined
+  when the event wasn't cancelled), or on iOS where no event ever fires, it
+  opens the instructions instead: Share > Add to Home Screen on iOS, the
+  browser menu elsewhere.
+
+Don't add a hand-built install banner on top of this. It was tried and
+removed: the goal was Chrome's own prompt, not a look-alike.
+
+To test the event handling, dispatch one from the console (the embedded browser
+won't fire a real one; a viewport under 768px reports an Android user agent):
+`const e = new Event('beforeinstallprompt', {cancelable: true});
+e.prompt = () => Promise.resolve(); e.userChoice = Promise.resolve({outcome:
+'accepted'}); dispatchEvent(e); e.defaultPrevented` should be `false` on
+Android and `true` elsewhere.
 
 ## Heart powers
 

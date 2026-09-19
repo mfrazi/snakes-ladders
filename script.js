@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-20b';
+  const BUILD = '2026-09-20c';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -2909,19 +2909,17 @@
   // there is instructions.
   let installPrompt = null;
 
-  // The banner is only for Android, where the install event fires on load and
-  // the address bar has no install icon to fall back on. Desktop browsers show
-  // one of their own, and iOS never fires the event. A dismissal is remembered
-  // for two weeks so it doesn't nag; the setup screen's link is always there.
-  const INSTALL_DISMISS_KEY = 'snakeLoveInstallDismissed_v1';
-  const INSTALL_DISMISS_DAYS = 14;
+  const INSTALL_LEAD_IOS =
+    "Safari doesn't offer an install button, so iOS needs two taps. Once added, the game opens in its own window and works offline.";
+  const INSTALL_LEAD_OTHER =
+    'Open your browser’s menu (in Chrome, the ⋮ at the top right) and choose Install app or Add to Home screen. Once added, the game opens in its own window and works offline.';
 
   function isIos() {
     // iPadOS 13+ reports itself as a Mac, so the touch check is what
     // separates an iPad from a desktop Safari that genuinely can install.
     return (
       /iphone|ipod|ipad/i.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1 && !/android/i.test(navigator.userAgent))
     );
   }
 
@@ -2941,53 +2939,23 @@
     // again is noise.
     if (isStandalone()) return;
 
-    const banner = $('install-banner');
-    const dismissedRecently = () => {
-      try {
-        const at = Number(localStorage.getItem(INSTALL_DISMISS_KEY));
-        return Boolean(at) && Date.now() - at < INSTALL_DISMISS_DAYS * 86400000;
-      } catch (e) {
-        return false;
-      }
-    };
-
-    // prompt() has to run inside the user's tap, so it's called before the
-    // first await. The event is single-use whatever the answer: a dismissed
-    // prompt can't be re-shown, and Chrome fires a fresh one on a later visit.
-    async function promptInstall() {
-      if (!installPrompt) return false;
-      installPrompt.prompt();
-      await installPrompt.userChoice;
-      installPrompt = null;
-      btn.classList.add('hidden');
-      banner.classList.add('hidden');
-      return true;
-    }
-
     window.addEventListener('beforeinstallprompt', (e) => {
-      // Chrome/Edge: hold the event instead of letting the browser show its
-      // own bottom infobar, so the prompt can come from here, at the top, with
-      // the app's name on it. It can only be used from a real user gesture.
-      e.preventDefault();
+      // Cancelling this event is exactly what stops Chrome showing its own
+      // install prompt (the one with the app's name and icon), and it was the
+      // reason nothing appeared on Android until the player found the link
+      // below. So on Android the event is left alone and Chrome does the
+      // asking. Elsewhere it's held back, so the link is the one entry point
+      // (desktop Chrome shows no prompt of its own anyway).
+      if (!/android/i.test(navigator.userAgent)) e.preventDefault();
+      // Kept either way for the link. It's single-use and only works from a
+      // real user gesture.
       installPrompt = e;
       btn.classList.remove('hidden');
-      if (/android/i.test(navigator.userAgent) && !dismissedRecently()) banner.classList.remove('hidden');
     });
 
     window.addEventListener('appinstalled', () => {
       installPrompt = null;
       btn.classList.add('hidden');
-      banner.classList.add('hidden');
-    });
-
-    $('install-banner-btn').addEventListener('click', promptInstall);
-    $('install-banner-close').addEventListener('click', () => {
-      banner.classList.add('hidden');
-      try {
-        localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now()));
-      } catch (e) {
-        /* storage unavailable */
-      }
     });
 
     if (isIos()) {
@@ -2997,11 +2965,30 @@
     }
 
     btn.addEventListener('click', async () => {
-      if (await promptInstall()) return;
+      if (installPrompt) {
+        const event = installPrompt;
+        // Consumed either way: a dismissed prompt can't be re-shown with the
+        // same event, and Chrome fires a fresh one if the user comes back.
+        installPrompt = null;
+        try {
+          event.prompt();
+          await event.userChoice;
+          btn.classList.add('hidden');
+          return;
+        } catch (err) {
+          // Chrome refused (the event was left uncancelled on Android, and
+          // that's not something the spec promises prompt() will accept), so
+          // fall through to telling the player where the button is.
+        }
+      }
       // Name the actual device — an iPad user told to look on their "iPhone"
       // reasonably wonders whether these are the right instructions at all.
-      const ipad = /ipad/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const ipad = isIos() && !/iphone|ipod/i.test(navigator.userAgent);
       $('install-title').textContent = ipad ? 'Install on your iPad' : isIos() ? 'Install on your iPhone' : 'Install this app';
+      // The steps in the markup are iOS's. Anywhere else the way in is the
+      // browser's own menu.
+      $('install-lead').textContent = isIos() ? INSTALL_LEAD_IOS : INSTALL_LEAD_OTHER;
+      $('install-steps').classList.toggle('hidden', !isIos());
       $('install-note').textContent = isIos()
         ? ''
         : "If you don't see an install option, this browser may not support installing web apps — Chrome, Edge or Safari can.";
