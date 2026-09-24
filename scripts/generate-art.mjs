@@ -20,8 +20,8 @@
  * lists, and it takes an aspect ratio directly. The key is read from the
  * environment only and never written anywhere.
  *
- * This is a dev tool: it's in scripts/, which .assetsignore and build.js both
- * keep out of the deployed site.
+ * This is a dev tool: it's in scripts/, which build.js never copies into
+ * dist/, so it stays off the deployed site.
  */
 import fs from 'node:fs';
 import path from 'node:path';
