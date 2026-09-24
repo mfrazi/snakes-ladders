@@ -122,7 +122,7 @@
     "600+ conversation questions across 12 topics",
     "42 surprise cards",
     "2 to 6 players on one device",
-    "Six living, randomly generated board scenes",
+    "Six living board scenes, each with its own ambient sound",
     "Play in English or Bahasa Indonesia",
     "Optional AI-written questions using your own API key",
     "Downloadable transcript of every question and answer",
@@ -145,6 +145,12 @@
     <path d="M15.5 8.5a5 5 0 0 1 0 7" />
     <path d="M18.5 5.5a9 9 0 0 1 0 13" />
   </symbol>
+  <!-- Effects only: one wave, where the full sound (effects + the scene's
+       ambience) has two. -->
+  <symbol id="i-sound-fx" viewBox="0 0 24 24">
+    <path d="M11 5 6 9H3v6h3l5 4z" />
+    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+  </symbol>
   <symbol id="i-sound-off" viewBox="0 0 24 24">
     <path d="M11 5 6 9H3v6h3l5 4z" />
     <path d="m16 9 5 6M21 9l-5 6" />
@@ -153,10 +159,6 @@
     <path d="M3 12a9 9 0 1 0 2.6-6.4" />
     <path d="M3 4v4h4" />
     <path d="M12 7.5V12l3 2" />
-  </symbol>
-  <symbol id="i-globe" viewBox="0 0 24 24">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
   </symbol>
   <symbol id="i-sparkle" viewBox="0 0 24 24">
     <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
@@ -261,8 +263,8 @@
       romantic in it. There are 600+ questions across twelve topics —
       Love, Money, Dreams, Deep Talk, Memories, Home &amp; Family, Growth,
       Gratitude, Adventure, Everyday, General and Fun &amp; Dare — plus 42
-      surprise cards, six randomly generated board scenes, and an optional mode
-      that writes fresh questions with your own AI API key.
+      surprise cards, six living board scenes to choose from, and an optional
+      mode that writes fresh questions with your own AI API key.
     </p>
     <p>
       It is free, needs no sign-up, keeps everything in your own browser, and
@@ -273,12 +275,14 @@
 </noscript>
 
 <!-- Animated scene, sits behind everything: an optional full-bleed photo
-     backdrop, the tiled photo texture, drawn detail, a slow sunlight wash and
-     the scene's drifting wildlife (petals, leaves, fireflies…). -->
+     backdrop, the tiled photo texture, drawn detail, a slow sunlight wash,
+     the scene's set pieces (meteors, sun rays, cloud shadows…) and its
+     drifting wildlife (petals, leaves, fireflies…). -->
 <div id="scene-backdrop" class="scene-backdrop" aria-hidden="true"></div>
 <div id="scene-photo" class="scene-photo"></div>
 <div id="scene-texture" class="scene-texture"></div>
 <div id="scene-light" class="scene-light" aria-hidden="true"></div>
+<div id="scene-events" class="scene-events" aria-hidden="true"></div>
 <div id="scene-life" class="scene-life" aria-hidden="true"></div>
 
 <!--
@@ -293,38 +297,38 @@
 <!-- SETUP -->
 <section id="setup-screen" class="screen">
   <div class="setup-card">
-    <h1 class="visually-hidden">Snakes &amp; Ladders</h1>
+    <h1 class="visually-hidden" data-i18n="appTitle">Snakes &amp; Ladders: Love &amp; Friends Edition</h1>
+
+    <!-- Mode and language share the first row: the card opens straight onto
+         the choices, with no heading or explanation above them. -->
+    <div class="setup-top">
+      <div class="segmented" id="mode-choice" role="group" data-i18n-attr="aria-label:mode"></div>
+      <div class="segmented segmented-mini" id="lang-choice" role="group" data-i18n-attr="aria-label:language"></div>
+    </div>
 
     <section class="field">
       <div class="field-head">
-        <h2 class="field-label" data-i18n="playingAs">Playing as</h2>
-        <div class="lang-switch" role="group" data-i18n-attr="aria-label:language">
-          <svg class="icon icon-sm" aria-hidden="true"><use href="#i-globe" /></svg>
-          <div class="segmented segmented-mini" id="lang-choice"></div>
-        </div>
+        <h2 class="field-label" data-i18n="scene">Scene</h2>
+        <span class="field-value" id="scene-name" aria-live="polite"></span>
       </div>
-      <div class="segmented" id="mode-choice"></div>
-      <p class="field-note" id="mode-hint"></p>
+      <div class="scene-picker" id="scene-choice" role="radiogroup" data-i18n-attr="aria-label:scene"></div>
     </section>
 
     <section class="field">
       <div class="field-head">
         <h2 class="field-label" data-i18n="players">Players</h2>
-      </div>
-      <div id="player-list" class="player-list"></div>
-      <div class="field-foot">
-        <button type="button" id="add-player-btn" class="link-btn">
+        <button type="button" id="add-player-btn" class="link-btn link-btn-compact">
           <svg class="icon icon-sm"><use href="#i-plus" /></svg>
           <span data-i18n="addPlayer">Add player</span>
         </button>
-        <span class="field-hint" data-i18n="tapHint">Tap a face or colour to change it</span>
       </div>
+      <div id="player-list" class="player-list"></div>
     </section>
 
     <section class="field">
       <div class="field-head">
         <h2 class="field-label" data-i18n="topics">Topics</h2>
-        <button type="button" id="theme-toggle-all" class="link-btn">Clear all</button>
+        <button type="button" id="theme-toggle-all" class="link-btn link-btn-compact">Clear all</button>
       </div>
       <div class="theme-chips" id="theme-chips"></div>
     </section>
@@ -349,17 +353,24 @@
             <span data-i18n="installApp">Install app</span>
           </button>
         </div>
-        <a
-          href="https://github.com/mfrazi/snakes-ladders"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="link-btn icon-link"
-          title="View source on GitHub"
-          aria-label="View source on GitHub"
-          data-i18n-attr="title:viewSource;aria-label:viewSource"
-        >
-          <svg class="icon"><use href="#i-github" /></svg>
-        </a>
+        <div class="setup-icons">
+          <!-- The same three-way sound switch as the game header: picking a
+               scene previews its ambience, so it can be muted from here too. -->
+          <button type="button" class="link-btn icon-link sound-toggle" title="Sound" aria-label="Sound">
+            <svg class="icon"><use href="#i-sound-on" /></svg>
+          </button>
+          <a
+            href="https://github.com/mfrazi/snakes-ladders"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="link-btn icon-link"
+            title="View source on GitHub"
+            aria-label="View source on GitHub"
+            data-i18n-attr="title:viewSource;aria-label:viewSource"
+          >
+            <svg class="icon"><use href="#i-github" /></svg>
+          </a>
+        </div>
       </div>
     </div>
   </div>
@@ -372,8 +383,8 @@
       <button type="button" id="lang-btn" class="icon-btn lang-btn" title="Switch language" aria-label="Switch language" data-i18n-attr="title:switchLanguage;aria-label:switchLanguage">
         <span id="lang-btn-label" class="lang-btn-label">EN</span>
       </button>
-      <button type="button" id="sound-btn" class="icon-btn" title="Sound" aria-label="Sound" data-i18n-attr="title:sound;aria-label:sound">
-        <svg class="icon"><use id="sound-icon" href="#i-sound-on" /></svg>
+      <button type="button" id="sound-btn" class="icon-btn sound-toggle" title="Sound" aria-label="Sound">
+        <svg class="icon"><use href="#i-sound-on" /></svg>
       </button>
       <button type="button" id="log-btn" class="icon-btn" title="History" aria-label="History" data-i18n-attr="title:history;aria-label:history">
         <svg class="icon"><use href="#i-history" /></svg>
@@ -430,10 +441,14 @@
 <!-- FULLSCREEN DICE -->
 <div id="dice-overlay" class="dice-overlay hidden">
   <div class="dice-stage" id="dice-stage">
+    <!-- Behind the die: a glow in the scene's accent once it settles. On the
+         ground: dust kicked up by the first bounce (see burstDice). -->
+    <div class="dice-glow" aria-hidden="true"></div>
+    <div class="dice-shadow"></div>
+    <div class="dice-burst" id="dice-burst" aria-hidden="true"></div>
     <div class="dice-lift">
       <div class="dice" id="dice"></div>
     </div>
-    <div class="dice-shadow"></div>
   </div>
   <p class="dice-hint" data-i18n="tapToSkip">Tap to skip</p>
 </div>

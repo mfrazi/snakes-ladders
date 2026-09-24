@@ -3,18 +3,19 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-24b';
+  const BUILD = '2026-09-24c';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
   const SOUND_KEY = 'snakeLoveSound_v1';
   const MODE_KEY = 'snakeLoveMode_v1';
   const LANG_KEY = 'snakeLoveLang_v1';
+  const SCENE_KEY = 'snakeLoveScene_v1';
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
-  // Kept comfortably longer than MAX_PLAYERS so there is always a free option
-  // to cycle to — every player must end up visually distinct.
-  const EMOJI_CHOICES = ['🐱', '🐶', '🐰', '🦊', '🐼', '🐨', '🐻', '🐷', '🐸', '🦁', '🐯', '🐵'];
+  // A player is a name and a colour — the colour is their only mark on the
+  // board. Kept comfortably longer than MAX_PLAYERS so there is always a free
+  // colour to cycle to, and every player ends up visually distinct.
   const COLOR_CHOICES = [
     '#d6336c',
     '#3b7dd8',
@@ -291,6 +292,8 @@
     renderModeChoice();
     renderThemeChips();
     renderRoster();
+    syncScenePicker();
+    syncSoundButtons();
     if (!state) return;
 
     renderAll();
@@ -354,7 +357,6 @@
     return {
       players: playerSetups.map((p) => ({
         name: p.name,
-        emoji: p.emoji,
         color: p.color,
         pos: 1,
         love: 0,
@@ -376,111 +378,1002 @@
   }
 
   // ---------- Sound ----------
-  // Everything is synthesised with Web Audio, so there are no asset files and
-  // nothing to load. The context is created on the first roll, which is a real
-  // user gesture — browsers block audio started any other way.
+  // Everything is synthesised with Web Audio: no sound files, nothing to
+  // download or precache, and it all works offline. The header button cycles
+  // three settings: everything (effects plus the scene's ambience), effects
+  // only, and off.
+  //
+  // Browsers only let audio start from a user gesture. The context is created
+  // (or resumed) by the first tap or key press — see unlockAudio — and every
+  // effect below is itself set off by one.
+  const SOUND_MODES = ['all', 'fx', 'off'];
+  const SOUND_ICONS = { all: '#i-sound-on', fx: '#i-sound-fx', off: '#i-sound-off' };
+  let soundMode = 'all';
   let audioCtx = null;
-  let soundOn = true;
+  // Effects feed sfxOut, each ambience feeds master through its own fader, and
+  // anything that wants a little room around it also feeds roomIn — one
+  // shared synthetic reverb, which effects reach through sfxRoom.
+  let master = null;
+  let sfxOut = null;
+  let sfxRoom = null;
+  let roomIn = null;
+  // Effects run 6 dB hot, so every roll and card lands on top of the scene
+  // rather than inside it. Measured, not guessed: a roll peaks around -19 LUFS
+  // (momentary) and -8 dBFS, while the scenes average -34 LUFS.
+  const SFX_LEVEL = 2;
+  const noiseBuffers = {};
+
+  const soundOn = () => soundMode !== 'off';
 
   function ensureAudio() {
-    if (!soundOn) return null;
+    if (!soundOn()) return null;
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
-    if (!audioCtx) audioCtx = new Ctx();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!audioCtx) {
+      audioCtx = new Ctx();
+      buildMix(audioCtx);
+    }
+    if (audioCtx.state === 'suspended' && !document.hidden) audioCtx.resume();
     return audioCtx;
   }
 
-  function blip(ctx, { freq, endFreq, type = 'sine', start = 0, duration = 0.12, gain = 0.12 }) {
-    const t0 = ctx.currentTime + start;
-    const osc = ctx.createOscillator();
-    const amp = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t0);
-    if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, t0 + duration);
-    amp.gain.setValueAtTime(0.0001, t0);
-    amp.gain.exponentialRampToValueAtTime(gain, t0 + 0.012);
-    amp.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
-    osc.connect(amp).connect(ctx.destination);
-    osc.start(t0);
-    osc.stop(t0 + duration + 0.03);
+  function buildMix(ctx) {
+    // A gentle compressor on the way out, so a pile of effects on top of the
+    // ambience can't clip.
+    master = ctx.createDynamicsCompressor();
+    master.threshold.value = -16;
+    master.knee.value = 10;
+    master.ratio.value = 3;
+    master.attack.value = 0.004;
+    master.release.value = 0.3;
+    master.connect(ctx.destination);
+
+    sfxOut = ctx.createGain();
+    sfxOut.gain.value = SFX_LEVEL;
+    sfxOut.connect(master);
+
+    // The room: a decaying burst of stereo noise as the impulse response,
+    // darkened on the way out so the tail never hisses.
+    const room = ctx.createConvolver();
+    room.buffer = roomImpulse(ctx, 2.4, 3);
+    const tone = ctx.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 4200;
+    roomIn = ctx.createGain();
+    roomIn.gain.value = 0.5;
+    roomIn.connect(room).connect(tone).connect(master);
+    sfxRoom = ctx.createGain();
+    sfxRoom.gain.value = SFX_LEVEL;
+    sfxRoom.connect(roomIn);
   }
 
-  function noiseBurst(ctx, { start = 0, duration = 0.06, gain = 0.1, freq = 1800 }) {
-    const t0 = ctx.currentTime + start;
-    const frames = Math.max(1, Math.floor(ctx.sampleRate * duration));
-    const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < frames; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / frames);
-
-    const src = ctx.createBufferSource();
-    src.buffer = buffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = freq;
-    const amp = ctx.createGain();
-    amp.gain.value = gain;
-    src.connect(filter).connect(amp).connect(ctx.destination);
-    src.start(t0);
-  }
-
-  // Dice clatter that thins out as the die slows, then a landing thud.
-  function soundDice() {
-    const ctx = ensureAudio();
-    if (!ctx) return;
-    const rollTime = DICE_MS / 1000;
-    const clatters = Math.max(6, Math.round(rollTime * 9));
-    for (let i = 0; i < clatters; i++) {
-      const at = (i / clatters) ** 1.5 * rollTime * 0.85;
-      noiseBurst(ctx, { start: at, duration: 0.05, gain: 0.07, freq: 900 + Math.random() * 1700 });
+  function roomImpulse(ctx, seconds, decay) {
+    const length = Math.floor(ctx.sampleRate * seconds);
+    const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buffer.getChannelData(ch);
+      for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length) ** decay;
     }
-    noiseBurst(ctx, { start: rollTime * 0.9, duration: 0.18, gain: 0.13, freq: 240 });
-    blip(ctx, { freq: 190, endFreq: 90, type: 'triangle', start: rollTime * 0.9, duration: 0.22, gain: 0.11 });
+    return buffer;
   }
 
-  function soundStep() {
+  // Looping stereo noise, made once per colour: white is flat, pink (Paul
+  // Kellet's filter) is softer, brown (integrated white) is the deep rumble
+  // under surf and wind. The loop point is crossfaded so it never clicks.
+  function noiseBuffer(ctx, color) {
+    if (noiseBuffers[color]) return noiseBuffers[color];
+    const rate = ctx.sampleRate;
+    const length = rate * 6;
+    const fade = Math.floor(rate * 0.25);
+    const buffer = ctx.createBuffer(2, length, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const raw = new Float32Array(length + fade);
+      let b0 = 0;
+      let b1 = 0;
+      let b2 = 0;
+      let last = 0;
+      for (let i = 0; i < raw.length; i++) {
+        const white = Math.random() * 2 - 1;
+        if (color === 'pink') {
+          b0 = 0.99765 * b0 + white * 0.099046;
+          b1 = 0.963 * b1 + white * 0.2965164;
+          b2 = 0.57 * b2 + white * 1.0526913;
+          raw[i] = (b0 + b1 + b2 + white * 0.1848) * 0.2;
+        } else if (color === 'brown') {
+          last = (last + 0.02 * white) / 1.02;
+          raw[i] = last * 3.5;
+        } else {
+          raw[i] = white * 0.5;
+        }
+      }
+      const data = buffer.getChannelData(ch);
+      data.set(raw.subarray(0, length));
+      // The first samples blend from what would have followed the last one.
+      for (let i = 0; i < fade; i++) {
+        const k = i / fade;
+        data[i] = raw[i] * k + raw[length + i] * (1 - k);
+      }
+    }
+    noiseBuffers[color] = buffer;
+    return buffer;
+  }
+
+  // Sends a node on to dest ({ dry, wet }), panned, with a share to the room.
+  function route(ctx, node, dest, pan, room) {
+    let out = node;
+    if (pan && ctx.createStereoPanner) {
+      const panner = ctx.createStereoPanner();
+      panner.pan.value = Math.max(-1, Math.min(1, pan));
+      node.connect(panner);
+      out = panner;
+    }
+    out.connect(dest.dry);
+    if (room && dest.wet) {
+      const send = ctx.createGain();
+      send.gain.value = room;
+      out.connect(send).connect(dest.wet);
+    }
+  }
+
+  // One oscillator with a percussive envelope, at an absolute audio time.
+  // `vibrato` is [rate Hz, depth Hz]; `lowpass` softens a bright waveform.
+  function voice(ctx, dest, opts) {
+    const { at, freq, endFreq, type = 'sine', duration = 0.12, gain = 0.1, attack = 0.012 } = opts;
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, at);
+    if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, at + duration);
+    const amp = ctx.createGain();
+    amp.gain.setValueAtTime(0.0001, at);
+    amp.gain.exponentialRampToValueAtTime(gain, at + attack);
+    amp.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+    let head = osc;
+    if (opts.lowpass) {
+      const soft = ctx.createBiquadFilter();
+      soft.type = 'lowpass';
+      soft.frequency.value = opts.lowpass;
+      head = head.connect(soft);
+    }
+    head.connect(amp);
+    if (opts.vibrato) {
+      const wobble = ctx.createOscillator();
+      wobble.frequency.value = opts.vibrato[0];
+      const depth = ctx.createGain();
+      depth.gain.value = opts.vibrato[1];
+      wobble.connect(depth).connect(osc.frequency);
+      wobble.start(at);
+      wobble.stop(at + duration + 0.05);
+    }
+    route(ctx, amp, dest, opts.pan, opts.room);
+    osc.start(at);
+    osc.stop(at + duration + 0.05);
+    return osc;
+  }
+
+  // A filtered noise hit: dice, crackles, rustles, whooshes.
+  function burst(ctx, dest, opts) {
+    const { at, duration = 0.06, gain = 0.1, freq = 1800, q = 1, type = 'bandpass', color = 'white', attack = 0.002 } = opts;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(ctx, color);
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.setValueAtTime(freq, at);
+    filter.Q.value = q;
+    const amp = ctx.createGain();
+    amp.gain.setValueAtTime(0.0001, at);
+    amp.gain.exponentialRampToValueAtTime(gain, at + attack);
+    amp.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+    src.connect(filter).connect(amp);
+    route(ctx, amp, dest, opts.pan, opts.room);
+    src.start(at, Math.random() * 5);
+    src.stop(at + duration + 0.05);
+    return { src, filter, amp };
+  }
+
+  // The effects' context, or null when sound is off or unsupported.
+  function fx() {
     const ctx = ensureAudio();
-    if (!ctx) return;
-    blip(ctx, { freq: 520, endFreq: 780, type: 'triangle', duration: 0.09, gain: 0.09 });
+    return ctx ? { ctx, dest: { dry: sfxOut, wet: sfxRoom }, now: ctx.currentTime } : null;
+  }
+
+  // A few quick high glints: the magic in a ladder, a good surprise, a win.
+  function sparkle(a, delay, count, gain = 0.03) {
+    for (let i = 0; i < count; i++) {
+      const f = 2400 + Math.random() * 2600;
+      voice(a.ctx, a.dest, {
+        at: a.now + delay + i * 0.045 + Math.random() * 0.02,
+        freq: f,
+        endFreq: f * 1.06,
+        duration: 0.12,
+        gain,
+        attack: 0.004,
+        pan: Math.random() * 1.4 - 0.7,
+        room: 0.4,
+      });
+    }
+  }
+
+  // Timings of the bounces diceToss (style.css) draws, as a share of DICE_MS.
+  const DICE_IMPACTS = [0.58, 0.79, 0.9];
+
+  // A rattle in the hand, a whoosh through the air, then a thud and a clack
+  // for every bounce, softer each time.
+  function soundDice() {
+    const a = fx();
+    if (!a) return;
+    const { ctx, dest, now } = a;
+    const T = DICE_MS / 1000;
+    for (let i = 0; i < 4; i++) {
+      burst(ctx, dest, { at: now + i * 0.035, duration: 0.03, gain: 0.05, freq: 2200 + Math.random() * 900, q: 2 });
+    }
+    const air = burst(ctx, dest, { at: now + 0.06, duration: T * 0.5, gain: 0.02, freq: 500, q: 0.8, color: 'pink', attack: T * 0.2 });
+    air.filter.frequency.exponentialRampToValueAtTime(1400, now + T * 0.3);
+    air.filter.frequency.exponentialRampToValueAtTime(600, now + T * 0.56);
+    DICE_IMPACTS.forEach((when, i) => {
+      const at = now + T * when;
+      const force = [1, 0.55, 0.3][i];
+      voice(ctx, dest, { at, freq: 170, endFreq: 70, type: 'triangle', duration: 0.2, gain: 0.13 * force, attack: 0.004 });
+      burst(ctx, dest, { at, duration: 0.05, gain: 0.11 * force, freq: 1900 + Math.random() * 700, q: 1.4, room: 0.15 });
+      if (i === 0) {
+        [0.05, 0.1, 0.17].forEach((d) =>
+          burst(ctx, dest, { at: at + d, duration: 0.03, gain: 0.04, freq: 2400 + Math.random() * 1200, q: 2 })
+        );
+      }
+    });
+  }
+
+  // Each step of a walk climbs the pentatonic scale, so a long roll sings.
+  const STEP_NOTES = [523.25, 587.33, 659.25, 783.99, 880, 1046.5];
+
+  function soundStep(n = 0) {
+    const a = fx();
+    if (!a) return;
+    const f = STEP_NOTES[n % STEP_NOTES.length];
+    voice(a.ctx, a.dest, { at: a.now, freq: f, endFreq: f * 1.12, type: 'triangle', duration: 0.09, gain: 0.07 });
   }
 
   function soundLadder() {
-    const ctx = ensureAudio();
-    if (!ctx) return;
-    [0, 1, 2, 3, 4].forEach((i) =>
-      blip(ctx, { freq: 392 + i * 108, type: 'sine', start: i * 0.1, duration: 0.15, gain: 0.09 })
+    const a = fx();
+    if (!a) return;
+    [523.25, 659.25, 783.99, 1046.5, 1318.51].forEach((freq, i) =>
+      voice(a.ctx, a.dest, { at: a.now + i * 0.09, freq, type: 'triangle', duration: 0.22, gain: 0.08, room: 0.3 })
     );
+    sparkle(a, 0.35, 6);
   }
 
+  // A hiss, then the long slide down.
   function soundSnake() {
-    const ctx = ensureAudio();
-    if (!ctx) return;
-    blip(ctx, { freq: 720, endFreq: 150, type: 'sawtooth', duration: 0.75, gain: 0.06 });
+    const a = fx();
+    if (!a) return;
+    burst(a.ctx, a.dest, { at: a.now, duration: 0.45, gain: 0.05, freq: 5200, q: 0.7, type: 'highpass', attack: 0.06 });
+    voice(a.ctx, a.dest, { at: a.now + 0.12, freq: 720, endFreq: 140, type: 'sawtooth', duration: 0.8, gain: 0.06, attack: 0.03, lowpass: 1600 });
   }
 
   function soundWin() {
-    const ctx = ensureAudio();
-    if (!ctx) return;
-    [523, 659, 784, 1047].forEach((freq, i) =>
-      blip(ctx, { freq, type: 'triangle', start: i * 0.13, duration: 0.32, gain: 0.12 })
+    const a = fx();
+    if (!a) return;
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) =>
+      voice(a.ctx, a.dest, { at: a.now + i * 0.12, freq, type: 'triangle', duration: 0.35, gain: 0.1, room: 0.3 })
+    );
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq) =>
+      voice(a.ctx, a.dest, { at: a.now + 0.55, freq, duration: 1.6, gain: 0.05, attack: 0.03, room: 0.5 })
+    );
+    sparkle(a, 0.5, 10);
+  }
+
+  // A light tick for picking a scene or a colour.
+  function soundPick() {
+    const a = fx();
+    if (!a) return;
+    voice(a.ctx, a.dest, { at: a.now, freq: 1320, endFreq: 1500, type: 'triangle', duration: 0.07, gain: 0.04 });
+  }
+
+  // A question card: a whoosh as it arrives, then a two-note chime.
+  function soundCardOpen() {
+    const a = fx();
+    if (!a) return;
+    const whoosh = burst(a.ctx, a.dest, { at: a.now, duration: 0.28, gain: 0.04, freq: 500, q: 0.9, color: 'pink', attack: 0.12 });
+    whoosh.filter.frequency.exponentialRampToValueAtTime(2600, a.now + 0.26);
+    voice(a.ctx, a.dest, { at: a.now + 0.16, freq: 880, duration: 0.5, gain: 0.06, room: 0.45 });
+    voice(a.ctx, a.dest, { at: a.now + 0.27, freq: 1318.51, duration: 0.6, gain: 0.05, room: 0.45 });
+  }
+
+  // "Answered": a bright little rise.
+  function soundAnswer() {
+    const a = fx();
+    if (!a) return;
+    [659.25, 830.61, 987.77].forEach((freq, i) =>
+      voice(a.ctx, a.dest, { at: a.now + i * 0.07, freq, type: 'triangle', duration: 0.25, gain: 0.07, room: 0.3 })
     );
   }
 
-  function setSound(on) {
-    soundOn = on;
+  function soundSkip() {
+    const a = fx();
+    if (!a) return;
+    voice(a.ctx, a.dest, { at: a.now, freq: 587.33, type: 'triangle', duration: 0.16, gain: 0.05 });
+    voice(a.ctx, a.dest, { at: a.now + 0.12, freq: 440, endFreq: 415.3, type: 'triangle', duration: 0.24, gain: 0.045 });
+  }
+
+  // "Another": a quick riffle, like thumbing through a deck.
+  function soundShuffle() {
+    const a = fx();
+    if (!a) return;
+    for (let i = 0; i < 6; i++) {
+      burst(a.ctx, a.dest, {
+        at: a.now + i * 0.028,
+        duration: 0.025,
+        gain: 0.035,
+        freq: 3000 + Math.random() * 1500,
+        q: 1.5,
+        pan: i % 2 ? 0.25 : -0.25,
+      });
+    }
+  }
+
+  // Hearts gained or lost, whatever caused it: a coin-bright ding, or a soft
+  // drop.
+  function soundHearts(delta) {
+    const a = fx();
+    if (!a) return;
+    if (delta > 0) {
+      voice(a.ctx, a.dest, { at: a.now, freq: 987.77, duration: 0.14, gain: 0.05, room: 0.3 });
+      voice(a.ctx, a.dest, { at: a.now + 0.08, freq: 1318.51, duration: 0.4, gain: 0.05, room: 0.35 });
+    } else {
+      voice(a.ctx, a.dest, { at: a.now, freq: 300, endFreq: 170, duration: 0.3, gain: 0.07, attack: 0.02 });
+    }
+  }
+
+  // A heart power bought: a rising, wobbling sweep with a glint on top.
+  function soundPower() {
+    const a = fx();
+    if (!a) return;
+    voice(a.ctx, a.dest, { at: a.now, freq: 330, endFreq: 990, type: 'triangle', duration: 0.35, gain: 0.06, vibrato: [12, 20] });
+    sparkle(a, 0.2, 5, 0.025);
+  }
+
+  // How a surprise card lands for the player who drew it.
+  function surpriseMood(surprise) {
+    switch (surprise.type) {
+      case 'moveSelf':
+        return surprise.value >= 0 ? 'good' : 'bad';
+      case 'lovePoints':
+        if (surprise.target === 'opponent') return 'neutral';
+        return surprise.value >= 0 ? 'good' : 'bad';
+      case 'skipTurn':
+        return surprise.target === 'opponent' ? 'good' : 'bad';
+      case 'extraTurn':
+      case 'bothPoints':
+      case 'action':
+        return 'good';
+      default:
+        return 'neutral';
+    }
+  }
+
+  // A shimmer as the card turns over, then the verdict: a "ta-da", a sad
+  // trombone, or a playful whoop for the swaps that could go either way.
+  function soundSurprise(mood) {
+    const a = fx();
+    if (!a) return;
+    const { ctx, dest, now } = a;
+    for (let i = 0; i < 8; i++) {
+      voice(ctx, dest, { at: now + i * 0.04, freq: 800 * 2 ** (i / 6), duration: 0.14, gain: 0.028, pan: (i % 2 ? 0.3 : -0.3), room: 0.35 });
+    }
+    const at = now + 0.38;
+    if (mood === 'good') {
+      [[523.25, 0], [783.99, 0], [1046.5, 0.08], [1318.51, 0.08]].forEach(([freq, d]) =>
+        voice(ctx, dest, { at: at + d, freq, type: 'triangle', duration: 0.55, gain: 0.06, room: 0.4 })
+      );
+      sparkle(a, 0.5, 6);
+    } else if (mood === 'bad') {
+      [392, 369.99, 349.23].forEach((freq, i) =>
+        voice(ctx, dest, { at: at + i * 0.22, freq, endFreq: freq * 0.97, type: 'sawtooth', duration: 0.24, gain: 0.05, lowpass: 900 })
+      );
+      voice(ctx, dest, { at: at + 0.66, freq: 329.63, endFreq: 311.13, type: 'sawtooth', duration: 0.7, gain: 0.05, lowpass: 900, vibrato: [6, 7] });
+    } else {
+      voice(ctx, dest, { at, freq: 440, endFreq: 880, type: 'triangle', duration: 0.22, gain: 0.06 });
+      voice(ctx, dest, { at: at + 0.2, freq: 660, endFreq: 1320, type: 'triangle', duration: 0.26, gain: 0.05 });
+    }
+  }
+
+  function loadSoundMode() {
+    let saved = null;
     try {
-      localStorage.setItem(SOUND_KEY, on ? 'on' : 'off');
+      saved = localStorage.getItem(SOUND_KEY);
     } catch (e) {
       /* storage unavailable */
     }
-    const icon = $('sound-icon');
-    if (icon) icon.setAttribute('href', on ? '#i-sound-on' : '#i-sound-off');
+    // 'on' is what the old two-way switch saved; it meant "all sound".
+    soundMode = SOUND_MODES.includes(saved) ? saved : 'all';
   }
 
+  function setSoundMode(mode) {
+    soundMode = SOUND_MODES.includes(mode) ? mode : 'all';
+    try {
+      localStorage.setItem(SOUND_KEY, soundMode);
+    } catch (e) {
+      /* storage unavailable */
+    }
+    syncSoundButtons();
+    if (audioCtx) {
+      if (!soundOn()) audioCtx.suspend();
+      else if (!document.hidden) audioCtx.resume();
+    }
+    updateAmbience();
+  }
+
+  // Pressing the button is a clear yes to sound, so it may start the ambience.
+  function cycleSound() {
+    ambienceWanted = true;
+    setSoundMode(SOUND_MODES[(SOUND_MODES.indexOf(soundMode) + 1) % SOUND_MODES.length]);
+    soundPick();
+    updateAmbience();
+  }
+
+  function syncSoundButtons() {
+    document.querySelectorAll('.sound-toggle').forEach((btn) => {
+      btn.querySelector('use').setAttribute('href', SOUND_ICONS[soundMode]);
+      const label = t(`sound.${soundMode}`);
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    });
+  }
+
+  // The first tap or key press anywhere: the moment audio may start. A game
+  // restored from a reload picks its ambience back up here.
+  function unlockAudio() {
+    if (!soundOn()) return;
+    ensureAudio();
+    if (state && !state.finished) ambienceWanted = true;
+    updateAmbience();
+  }
+
+  // ---------- Ambience ----------
+  // Each scene's soundscape, synthesised on the spot: wind and surf from
+  // filtered noise; birds, crickets, an owl, chimes and a candlelit café pad
+  // from oscillators. Nothing repeats audibly, because events are placed at
+  // random on the audio clock a few seconds ahead — the lookahead pattern:
+  // setInterval only wakes the scheduler, it never times a sound itself.
+  //
+  // It starts once there's a reason to expect sound — picking a scene,
+  // starting a game, pressing the sound button — never on page load, and it
+  // stops while the page is hidden.
+  let ambience = null;
+  let ambienceWanted = false;
+  let shownScene = null;
+
+  function updateAmbience() {
+    const theme = BOARD_THEMES[shownScene];
+    const running = audioCtx && audioCtx.state !== 'closed';
+    const key =
+      ambienceWanted && soundMode === 'all' && running && !document.hidden && theme ? theme.ambience : null;
+    if (ambience && ambience.key === key) return;
+    if (ambience) ambience.stop();
+    ambience = key && AMBIENCES[key] ? { key, stop: playAmbience(audioCtx, key) } : null;
+  }
+
+  function playAmbience(ctx, key) {
+    const recipe = AMBIENCES[key];
+    const scene = {
+      ctx,
+      dry: ctx.createGain(),
+      wet: ctx.createGain(),
+      sources: [],
+      rand: (min, max) => min + Math.random() * (max - min),
+    };
+    scene.dest = { dry: scene.dry, wet: scene.wet };
+    scene.dry.connect(master);
+    scene.wet.connect(roomIn);
+    recipe.bed(scene);
+
+    // Fades in over a few seconds, so it arrives rather than switches on, to
+    // the recipe's own level — set so every scene sits at the same loudness.
+    const now = ctx.currentTime;
+    [scene.dry, scene.wet].forEach((fader) => {
+      fader.gain.setValueAtTime(0, now);
+      fader.gain.linearRampToValueAtTime(recipe.level || 1, now + 3);
+    });
+
+    const events = recipe.events(scene).map((ev) => ({ ...ev, next: now + (ev.first || 0.5) }));
+    const gap = (ev) => (typeof ev.every === 'function' ? ev.every(scene) : scene.rand(ev.every[0], ev.every[1]));
+    const tick = () => {
+      const horizon = ctx.currentTime + 2.5;
+      events.forEach((ev) => {
+        while (ev.next < horizon) {
+          ev.play(scene, Math.max(ev.next, ctx.currentTime + 0.05));
+          ev.next += gap(ev);
+        }
+      });
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+
+    return () => {
+      clearInterval(timer);
+      const t0 = ctx.currentTime;
+      [scene.dry, scene.wet].forEach((fader) => {
+        fader.gain.cancelScheduledValues(t0);
+        fader.gain.setValueAtTime(fader.gain.value, t0);
+        fader.gain.linearRampToValueAtTime(0, t0 + 1.5);
+      });
+      setTimeout(() => {
+        scene.sources.forEach((src) => {
+          try {
+            src.stop();
+          } catch (e) {
+            /* already stopped */
+          }
+        });
+        scene.dry.disconnect();
+        scene.wet.disconnect();
+      }, 1800);
+    };
+  }
+
+  // A slow sine wobble on a parameter, around whatever value it already has.
+  function lfo(scene, param, rate, depth) {
+    const osc = scene.ctx.createOscillator();
+    osc.frequency.value = rate * scene.rand(0.85, 1.15);
+    const amount = scene.ctx.createGain();
+    amount.gain.value = depth;
+    osc.connect(amount).connect(param);
+    osc.start();
+    scene.sources.push(osc);
+  }
+
+  // A continuous layer of filtered noise. `swell` is a list of [rate, depth as
+  // a share of gain] — gusts and lulls; `sweep` is [rate, depth in Hz].
+  function noiseBed(scene, opts) {
+    const { ctx } = scene;
+    const { color = 'pink', type = 'bandpass', freq, q = 0.7, gain } = opts;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(ctx, color);
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.value = freq;
+    filter.Q.value = q;
+    const amp = ctx.createGain();
+    amp.gain.value = gain;
+    src.connect(filter).connect(amp);
+    route(ctx, amp, scene.dest, opts.pan, opts.room);
+    (opts.swell || []).forEach(([rate, share]) => lfo(scene, amp.gain, rate, gain * share));
+    if (opts.sweep) lfo(scene, filter.frequency, opts.sweep[0], opts.sweep[1]);
+    src.start(ctx.currentTime, Math.random() * src.buffer.duration);
+    scene.sources.push(src);
+    return { filter, amp };
+  }
+
+  // A one-off stretch of noise with its own filter, for waves and gusts.
+  function noiseSwell(scene, at, length, opts) {
+    const { ctx } = scene;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(ctx, opts.color || 'pink');
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = opts.type || 'lowpass';
+    filter.frequency.value = opts.freq || 800;
+    filter.Q.value = opts.q || 0.5;
+    const amp = ctx.createGain();
+    amp.gain.value = 0.0001;
+    src.connect(filter).connect(amp);
+    let panner = null;
+    if (ctx.createStereoPanner) {
+      panner = ctx.createStereoPanner();
+      panner.pan.value = opts.pan || 0;
+      amp.connect(panner);
+    }
+    const out = panner || amp;
+    out.connect(scene.dry);
+    if (opts.room) {
+      const send = ctx.createGain();
+      send.gain.value = opts.room;
+      out.connect(send).connect(scene.wet);
+    }
+    src.start(at, Math.random() * 5);
+    src.stop(at + length + 0.1);
+    return { filter, amp, panner };
+  }
+
+  // Points on a gain curve, as [value, seconds after `at`].
+  function shape(param, at, points) {
+    param.setValueAtTime(points[0][0], at + points[0][1]);
+    points.slice(1).forEach(([value, when]) => param.exponentialRampToValueAtTime(Math.max(value, 0.0001), at + when));
+  }
+
+  // ---- Calls and cries, shared by the scenes.
+
+  // A songbird's phrase: a run of quick gliding chirps. Some birds sit
+  // further off, quieter and wetter.
+  function songbird(scene, at, low, high) {
+    const notes = 3 + Math.floor(Math.random() * 5);
+    const pan = scene.rand(-0.8, 0.8);
+    const far = Math.random() < 0.4;
+    let t = at;
+    for (let i = 0; i < notes; i++) {
+      const f = scene.rand(low, high);
+      const len = scene.rand(0.05, 0.13);
+      const rising = Math.random() < 0.5;
+      voice(scene.ctx, scene.dest, {
+        at: t,
+        freq: rising ? f * 0.85 : f * 1.15,
+        endFreq: f,
+        duration: len,
+        gain: far ? 0.018 : 0.04,
+        attack: 0.008,
+        pan,
+        room: far ? 0.5 : 0.2,
+      });
+      t += len + scene.rand(0.02, 0.07);
+    }
+  }
+
+  // Two falling notes, "tee-oo", once to three times.
+  function whistleBird(scene, at) {
+    const pan = scene.rand(-0.7, 0.7);
+    const calls = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < calls; i++) {
+      const t = at + i * 0.42;
+      voice(scene.ctx, scene.dest, { at: t, freq: 4300, endFreq: 4100, duration: 0.16, gain: 0.03, pan, room: 0.25 });
+      voice(scene.ctx, scene.dest, { at: t + 0.18, freq: 3300, endFreq: 3000, duration: 0.2, gain: 0.026, pan, room: 0.25 });
+    }
+  }
+
+  // "Coo-COO-coo, coo-coo" from somewhere in the canopy.
+  function woodPigeon(scene, at) {
+    const pan = scene.rand(-0.6, 0.6);
+    [[0, 0.32, 1], [0.42, 0.5, 1.15], [1, 0.3, 0.9], [1.5, 0.28, 1], [1.85, 0.28, 0.95]].forEach(([d, len, k]) =>
+      voice(scene.ctx, scene.dest, { at: at + d, freq: 540 * k, endFreq: 480 * k, duration: len, gain: 0.026, attack: 0.06, pan, room: 0.5, lowpass: 900 })
+    );
+  }
+
+  function woodpecker(scene, at) {
+    const hits = 10 + Math.floor(Math.random() * 6);
+    const pan = scene.rand(-0.8, 0.8);
+    for (let i = 0; i < hits; i++) {
+      burst(scene.ctx, scene.dest, { at: at + i * 0.055, duration: 0.03, gain: 0.03 * (1 - (i / hits) * 0.5), freq: 1100, q: 3, pan, room: 0.5 });
+    }
+  }
+
+  // A skylark's trill: fast alternating notes, high and light.
+  function lark(scene, at) {
+    const n = 10 + Math.floor(Math.random() * 12);
+    const base = scene.rand(3800, 5000);
+    const pan = scene.rand(-0.6, 0.6);
+    for (let i = 0; i < n; i++) {
+      voice(scene.ctx, scene.dest, {
+        at: at + i * 0.045,
+        freq: base * (i % 2 ? 1.18 : 1),
+        endFreq: base * (i % 2 ? 1.1 : 1.06),
+        duration: 0.04,
+        gain: 0.02,
+        attack: 0.004,
+        pan,
+        room: 0.3,
+      });
+    }
+  }
+
+  // A bee drifting past from one side to the other.
+  function bee(scene, at) {
+    const { ctx } = scene;
+    const length = scene.rand(3, 5);
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = scene.rand(190, 240);
+    const buzz = ctx.createOscillator();
+    buzz.frequency.value = scene.rand(7, 11);
+    const buzzDepth = ctx.createGain();
+    buzzDepth.gain.value = 6;
+    buzz.connect(buzzDepth).connect(osc.frequency);
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 520;
+    band.Q.value = 1.4;
+    const amp = ctx.createGain();
+    shape(amp.gain, at, [[0.0001, 0], [0.03, length * 0.45], [0.0001, length]]);
+    osc.connect(band).connect(amp);
+    if (ctx.createStereoPanner) {
+      const pan = ctx.createStereoPanner();
+      const from = Math.random() < 0.5 ? -0.9 : 0.9;
+      pan.pan.setValueAtTime(from, at);
+      pan.pan.linearRampToValueAtTime(-from, at + length);
+      amp.connect(pan).connect(scene.dry);
+    } else {
+      amp.connect(scene.dry);
+    }
+    osc.start(at);
+    buzz.start(at);
+    osc.stop(at + length + 0.1);
+    buzz.stop(at + length + 0.1);
+  }
+
+  function grasshopper(scene, at) {
+    const n = 5 + Math.floor(Math.random() * 6);
+    const pan = scene.rand(-0.7, 0.7);
+    for (let i = 0; i < n; i++) {
+      burst(scene.ctx, scene.dest, { at: at + i * 0.09, duration: 0.035, gain: 0.012, freq: 6800, q: 4, pan });
+    }
+  }
+
+  // A wave: dark noise that swells and opens up as it breaks, then foam
+  // fizzing back down the sand.
+  function wave(scene, at) {
+    const rise = scene.rand(1.8, 2.8);
+    const fall = scene.rand(3.2, 4.8);
+    const size = scene.rand(0.7, 1.1);
+    const pan = scene.rand(-0.35, 0.35);
+    const body = noiseSwell(scene, at, rise + fall, { color: 'pink', type: 'lowpass', q: 0.5, pan, room: 0.15 });
+    body.filter.frequency.setValueAtTime(260, at);
+    body.filter.frequency.exponentialRampToValueAtTime(1500 * size, at + rise);
+    body.filter.frequency.exponentialRampToValueAtTime(320, at + rise + fall);
+    shape(body.amp.gain, at, [[0.0001, 0], [0.12 * size, rise], [0.04 * size, rise + fall * 0.5], [0.0001, rise + fall]]);
+    const foam = noiseSwell(scene, at, rise + fall, { color: 'white', type: 'highpass', freq: 2600, q: 0.4, pan: -pan, room: 0.2 });
+    shape(foam.amp.gain, at, [[0.0001, 0], [0.0001, rise * 0.8], [0.035 * size, rise + 0.4], [0.0001, rise + fall]]);
+  }
+
+  // Water lapping close by: a small splash and a few droplets.
+  function lap(scene, at) {
+    const splash = noiseSwell(scene, at, 0.6, { color: 'white', type: 'bandpass', freq: 1300, q: 0.8, pan: scene.rand(-0.6, 0.6) });
+    splash.filter.frequency.exponentialRampToValueAtTime(500, at + 0.5);
+    shape(splash.amp.gain, at, [[0.0001, 0], [0.02, 0.05], [0.0001, 0.5]]);
+    const drops = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < drops; i++) {
+      const f = scene.rand(700, 1300);
+      voice(scene.ctx, scene.dest, { at: at + 0.15 + i * scene.rand(0.08, 0.18), freq: f, endFreq: f * 1.9, duration: 0.05, gain: 0.01, attack: 0.003, room: 0.3 });
+    }
+  }
+
+  // Crickets: each one a pure high tone gated into a few quick pulses per
+  // chirp, on its own steady beat, now and then falling silent.
+  function crickets(scene) {
+    return [0, 1, 2].map((i) => {
+      const cricket = {
+        freq: scene.rand(4200, 5200),
+        pan: [-0.7, 0.1, 0.75][i],
+        period: scene.rand(0.55, 0.95),
+        pulses: 3 + Math.floor(Math.random() * 2),
+        gain: scene.rand(0.006, 0.011),
+      };
+      return {
+        first: scene.rand(0.2, 1.5),
+        every: () => (Math.random() < 0.05 ? scene.rand(2, 5) : cricket.period * scene.rand(0.96, 1.04)),
+        play: (s, at) => {
+          for (let p = 0; p < cricket.pulses; p++) {
+            voice(s.ctx, s.dest, { at: at + p * 0.04, freq: cricket.freq, duration: 0.022, gain: cricket.gain, attack: 0.003, pan: cricket.pan, room: 0.15 });
+          }
+        },
+      };
+    });
+  }
+
+  // A tawny owl in the distance: "hoo… hoo-hooo".
+  function owl(scene, at) {
+    const pan = scene.rand(-0.7, 0.7);
+    const base = scene.rand(300, 360);
+    [[0, 0.5, 1], [0.95, 0.22, 1.04], [1.3, 0.62, 0.98]].forEach(([d, len, k]) =>
+      voice(scene.ctx, scene.dest, {
+        at: at + d,
+        freq: base * k * 1.04,
+        endFreq: base * k * 0.94,
+        duration: len,
+        gain: 0.035,
+        attack: 0.07,
+        pan,
+        room: 0.6,
+        lowpass: 700,
+        vibrato: [5, 4],
+      })
+    );
+  }
+
+  // Wind chimes, one to four strikes. Each is a few inharmonic partials that
+  // ring out at different rates, which is what makes metal sound like metal.
+  const CHIME_NOTES = [587.33, 659.25, 783.99, 880, 987.77, 1174.66];
+
+  function windChimes(scene, at) {
+    const strikes = 1 + Math.floor(Math.random() * 4);
+    let t = at;
+    for (let i = 0; i < strikes; i++) {
+      const f = CHIME_NOTES[Math.floor(Math.random() * CHIME_NOTES.length)];
+      const gain = scene.rand(0.012, 0.02);
+      const pan = scene.rand(-0.5, 0.5);
+      [[1, 1, 3.2], [2.76, 0.4, 1.6], [5.4, 0.2, 0.9], [8.93, 0.1, 0.5]].forEach(([k, g, d]) =>
+        voice(scene.ctx, scene.dest, { at: t, freq: f * k, duration: d, gain: gain * g, attack: 0.003, pan, room: 0.6 })
+      );
+      t += scene.rand(0.12, 0.5);
+    }
+  }
+
+  // Sand lifted by a gust, hissing across from one side.
+  function sandGust(scene, at) {
+    const length = scene.rand(2, 3);
+    const from = Math.random() < 0.5 ? -0.8 : 0.8;
+    const gust = noiseSwell(scene, at, length, { color: 'white', type: 'highpass', freq: 4000, q: 0.5, pan: from, room: 0.1 });
+    shape(gust.amp.gain, at, [[0.0001, 0], [0.018, length * 0.4], [0.0001, length]]);
+    if (gust.panner) gust.panner.pan.linearRampToValueAtTime(-from, at + length);
+  }
+
+  // The café: slow chords, a music-box tune wandering over them, and the odd
+  // crackle of a candle wick.
+  const CAFE_CHORDS = [
+    [174.61, 261.63, 329.63, 440],
+    [164.81, 246.94, 293.66, 392],
+    [146.83, 220, 261.63, 329.63, 349.23],
+    [130.81, 196, 246.94, 329.63],
+  ];
+  const CAFE_BELLS = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51];
+
+  function cafeChord(scene, at) {
+    const { ctx } = scene;
+    const notes = CAFE_CHORDS[scene.chord++ % CAFE_CHORDS.length];
+    const bus = ctx.createGain();
+    bus.gain.setValueAtTime(0, at);
+    bus.gain.linearRampToValueAtTime(1, at + 2.5);
+    bus.gain.setValueAtTime(1, at + 7.5);
+    bus.gain.linearRampToValueAtTime(0, at + 10.5);
+    const tone = ctx.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 950;
+    tone.Q.value = 0.3;
+    bus.connect(tone);
+    route(ctx, tone, scene.dest, 0, 0.6);
+    notes.forEach((freq, i) => {
+      const spread = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
+      if (spread.pan) spread.pan.value = (i / (notes.length - 1)) * 0.6 - 0.3;
+      spread.connect(bus);
+      [-6, 6].forEach((cents) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        osc.detune.value = cents;
+        const level = ctx.createGain();
+        level.gain.value = 0.011;
+        osc.connect(level).connect(spread);
+        osc.start(at);
+        osc.stop(at + 10.6);
+      });
+    });
+  }
+
+  function musicBox(scene, at) {
+    const pick = () => CAFE_BELLS[Math.floor(Math.random() * CAFE_BELLS.length)];
+    const tine = (t, f, gain) => {
+      const pan = scene.rand(-0.5, 0.5);
+      voice(scene.ctx, scene.dest, { at: t, freq: f, duration: 1.8, gain, attack: 0.005, pan, room: 0.6 });
+      voice(scene.ctx, scene.dest, { at: t, freq: f * 3.01, duration: 0.5, gain: gain * 0.22, attack: 0.003, pan, room: 0.6 });
+    };
+    tine(at, pick(), 0.02);
+    if (Math.random() < 0.3) tine(at + 0.28, pick(), 0.015);
+  }
+
+  function candleCrackle(scene, at) {
+    const pops = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < pops; i++) {
+      burst(scene.ctx, scene.dest, {
+        at: at + i * scene.rand(0.04, 0.12),
+        duration: 0.014,
+        gain: scene.rand(0.004, 0.008),
+        freq: scene.rand(1500, 3000),
+        q: 2.5,
+        attack: 0.003,
+        pan: scene.rand(-0.4, 0.4),
+        room: 0.1,
+      });
+    }
+  }
+
+  // Keyed by each scene's `ambience` in data.js. `bed` builds the continuous
+  // layers; `events` lists what happens now and then ([min, max] seconds
+  // apart, or a function for anything with its own rhythm). `level` is the
+  // scene's fader, measured (K-weighted, as LUFS) so all six average about
+  // -34 LUFS; night sits a touch lower on purpose. Re-measure if you change a
+  // layer's gain, rather than judging by ear on one pair of speakers.
+  const AMBIENCES = {
+    cafe: {
+      level: 0.7,
+      bed(scene) {
+        scene.chord = 0;
+        noiseBed(scene, { color: 'pink', type: 'lowpass', freq: 700, q: 0.4, gain: 0.018, swell: [[0.05, 0.3]] });
+      },
+      events: () => [
+        { every: [8, 8], first: 0.1, play: cafeChord },
+        { every: [1.4, 3.6], first: 2, play: musicBox },
+        { every: [1.5, 5], first: 1, play: candleCrackle },
+      ],
+    },
+    forest: {
+      level: 1.4,
+      bed(scene) {
+        noiseBed(scene, { color: 'pink', freq: 520, q: 0.8, gain: 0.05, swell: [[0.07, 0.5], [0.17, 0.25]], sweep: [0.05, 180] });
+        noiseBed(scene, { color: 'white', type: 'highpass', freq: 3200, q: 0.5, gain: 0.0025, swell: [[0.11, 0.8]] });
+        noiseBed(scene, { color: 'brown', type: 'lowpass', freq: 260, q: 0.5, gain: 0.02 });
+      },
+      events: () => [
+        { every: [2.2, 6.5], first: 1, play: (scene, at) => songbird(scene, at, 2400, 3900) },
+        { every: [6, 14], first: 4, play: whistleBird },
+        { every: [16, 32], first: 10, play: woodPigeon },
+        { every: [28, 55], first: 20, play: woodpecker },
+      ],
+    },
+    meadow: {
+      level: 2.35,
+      bed(scene) {
+        noiseBed(scene, { color: 'pink', freq: 800, q: 0.8, gain: 0.025, swell: [[0.09, 0.5], [0.23, 0.2]], sweep: [0.06, 240] });
+        noiseBed(scene, { color: 'white', type: 'highpass', freq: 5500, q: 0.5, gain: 0.002, swell: [[0.13, 0.6]] });
+      },
+      events: () => [
+        { every: [1.8, 5], first: 0.8, play: (scene, at) => songbird(scene, at, 3000, 4800) },
+        { every: [4, 9], first: 3, play: lark },
+        { every: [14, 26], first: 6, play: bee },
+        { every: [9, 18], first: 5, play: grasshopper },
+      ],
+    },
+    shore: {
+      level: 1.08,
+      bed(scene) {
+        noiseBed(scene, { color: 'brown', type: 'lowpass', freq: 380, q: 0.4, gain: 0.035, swell: [[0.06, 0.35]] });
+      },
+      events: () => [
+        { every: [5.5, 9], first: 0.3, play: wave },
+        { every: [6, 14], first: 4, play: lap },
+      ],
+    },
+    dunes: {
+      level: 1.1,
+      bed(scene) {
+        noiseBed(scene, { color: 'pink', freq: 420, q: 0.7, gain: 0.045, swell: [[0.05, 0.6], [0.13, 0.3]], sweep: [0.03, 180] });
+        // The wind singing over a ridge: one narrow band of noise, wandering.
+        noiseBed(scene, { color: 'white', freq: 1150, q: 14, gain: 0.12, swell: [[0.07, 0.9]], sweep: [0.04, 320] });
+        // A low, warm drone under it all: the heat of the hour.
+        [110, 164.81, 220.5].forEach((freq) => {
+          const osc = scene.ctx.createOscillator();
+          osc.frequency.value = freq;
+          const level = scene.ctx.createGain();
+          level.gain.value = 0.0045;
+          osc.connect(level);
+          route(scene.ctx, level, scene.dest, 0, 0.3);
+          lfo(scene, level.gain, 0.08, 0.002);
+          osc.start();
+          scene.sources.push(osc);
+        });
+      },
+      events: () => [
+        { every: [7, 15], first: 3, play: windChimes },
+        { every: [9, 16], first: 6, play: sandGust },
+      ],
+    },
+    night: {
+      level: 2.2,
+      bed(scene) {
+        noiseBed(scene, { color: 'brown', type: 'lowpass', freq: 450, q: 0.4, gain: 0.025, swell: [[0.05, 0.5]] });
+        noiseBed(scene, { color: 'pink', freq: 900, q: 0.5, gain: 0.008, swell: [[0.07, 0.8]] });
+      },
+      events: (scene) => crickets(scene).concat([{ every: [22, 40], first: 8, play: owl }]),
+    },
+  };
+
   // ---------- Board theme ----------
-  // Chosen ahead of time so the setup screen already shows the scene the next
-  // game will be played in, instead of the scenery only appearing after Start.
+  // The scene is picked on the setup screen: one of BOARD_THEMES, or Random.
+  // Like the language it's a device preference, so it sticks between games.
+  // Random draws a new scene for every game, never the one just played, so
+  // Play again always changes the view.
+  //
+  // pendingBoardTheme is the scene the next game will use. It's decided ahead
+  // of time so the setup screen already shows it behind the card.
+  const SCENE_RANDOM = 'random';
+  let scenePref = SCENE_RANDOM;
   let pendingBoardTheme = null;
+
+  function loadScenePref() {
+    try {
+      const saved = localStorage.getItem(SCENE_KEY);
+      if (saved === SCENE_RANDOM || BOARD_THEMES[saved]) scenePref = saved;
+    } catch (e) {
+      /* storage unavailable */
+    }
+  }
 
   function randomBoardTheme(avoid) {
     const keys = Object.keys(BOARD_THEMES).filter((key) => key !== avoid);
@@ -488,9 +1381,81 @@
   }
 
   function takeBoardTheme() {
+    if (BOARD_THEMES[scenePref]) {
+      pendingBoardTheme = scenePref;
+      return scenePref;
+    }
     const chosen = pendingBoardTheme || randomBoardTheme();
     pendingBoardTheme = randomBoardTheme(chosen);
     return chosen;
+  }
+
+  // Previews the pick behind the card straight away. Tapping Random again
+  // deals another scene, so the button visibly does something every time.
+  function setScenePref(pref) {
+    if (pref !== SCENE_RANDOM && !BOARD_THEMES[pref]) return;
+    scenePref = pref;
+    try {
+      localStorage.setItem(SCENE_KEY, pref);
+    } catch (e) {
+      /* storage unavailable */
+    }
+    pendingBoardTheme = pref === SCENE_RANDOM ? randomBoardTheme(pendingBoardTheme) : pref;
+    // Picking a scene is a tap and a clear interest in it: its soundscape may
+    // come in to preview it too.
+    ambienceWanted = true;
+    ensureAudio();
+    applyBoardTheme(pendingBoardTheme);
+    syncScenePicker();
+    soundPick();
+    updateAmbience();
+  }
+
+  const sceneLabel = (key) => (key === SCENE_RANDOM ? t('sceneRandom') : loc(BOARD_THEMES[key], 'label'));
+
+  function renderScenePicker() {
+    const container = $('scene-choice');
+    container.innerHTML = '';
+    // The Random swatch is a wheel of every scene's own colours.
+    const wheel = Object.values(BOARD_THEMES).map((theme) => theme.accent);
+    [SCENE_RANDOM].concat(Object.keys(BOARD_THEMES)).forEach((key) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'scene-swatch';
+      btn.dataset.scene = key;
+      btn.setAttribute('role', 'radio');
+      if (key === SCENE_RANDOM) {
+        btn.style.setProperty('--swatch', `conic-gradient(from 200deg, ${wheel.concat(wheel[0]).join(', ')})`);
+        btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-shuffle" /></svg>';
+      } else {
+        btn.style.setProperty('--swatch', BOARD_THEMES[key].swatch);
+        btn.style.setProperty('--swatch-accent', BOARD_THEMES[key].accent);
+      }
+      container.appendChild(btn);
+    });
+    syncScenePicker();
+  }
+
+  // Labels and the checked state, without rebuilding the buttons — a rebuild
+  // would drop keyboard focus from the swatch that was just pressed.
+  function syncScenePicker() {
+    $('scene-choice').querySelectorAll('.scene-swatch').forEach((btn) => {
+      const label = sceneLabel(btn.dataset.scene);
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('aria-checked', String(btn.dataset.scene === scenePref));
+    });
+    $('scene-name').textContent = sceneLabel(scenePref);
+  }
+
+  function initScenePicker() {
+    renderScenePicker();
+    $('scene-choice').addEventListener('click', (e) => {
+      const btn = e.target.closest('.scene-swatch');
+      if (!btn) return;
+      setScenePref(btn.dataset.scene);
+      pulse(btn, 'picked');
+    });
   }
 
   function boardTheme(key) {
@@ -531,7 +1496,13 @@
     document.documentElement.dataset.glass = theme.glass || 'light';
     root.setProperty('--sunlight', theme.sunlight || 'rgba(255, 245, 225, 0.8)');
     applyBackdrop(theme);
-    buildSceneLife(theme);
+    const sceneKey = BOARD_THEMES[key] ? key : state && BOARD_THEMES[state.boardTheme] ? state.boardTheme : 'romance';
+    if (sceneKey !== shownScene) {
+      shownScene = sceneKey;
+      buildSceneLife(theme);
+      buildSceneEvents(theme);
+      updateAmbience();
+    }
 
     // Installed as a PWA, this tints the OS status bar / title bar to match
     // whichever scene is live, same as everything else in the app already does.
@@ -683,6 +1654,340 @@
     }
   }
 
+  // ---------- Scene events ----------
+  // Set pieces over the living layer, keyed by each scene's `events` in
+  // data.js: stars and meteors at night, shafts of sun through the canopy,
+  // caustics on the shallows, cloud shadows over the meadow, sand blowing off
+  // the dunes, candlelight bokeh at the café. Standing pieces are a handful of
+  // elements on their own clocks; passing ones are made, flown once and
+  // removed. Transforms and opacity only, and nothing under reduced motion.
+  let eventLoops = [];
+
+  function buildSceneEvents(theme) {
+    const host = $('scene-events');
+    if (!host) return;
+    eventLoops.forEach(clearTimeout);
+    eventLoops = [];
+    host.getAnimations({ subtree: true }).forEach((animation) => animation.cancel());
+    host.replaceChildren();
+    host.dataset.kind = '';
+    const kind = theme.events;
+    if (!kind || REDUCED_MOTION || !SCENE_EVENTS[kind]) return;
+    host.dataset.kind = kind;
+    SCENE_EVENTS[kind](host, window.innerWidth, window.innerHeight);
+  }
+
+  // Calls fn at random intervals for as long as the scene lasts, skipping
+  // while the page is hidden (a burst of catch-up on return would be odd).
+  function every(min, max, fn, first) {
+    const slot = eventLoops.length;
+    const next = (delay) => {
+      eventLoops[slot] = setTimeout(() => {
+        if (!document.hidden) fn();
+        next(min + Math.random() * (max - min));
+      }, delay);
+    };
+    next(first === undefined ? min + Math.random() * (max - min) : first);
+  }
+
+  // One element, animated once and removed.
+  function flyOnce(host, className, frames, options, setup) {
+    const el = document.createElement('div');
+    el.className = className;
+    if (setup) setup(el);
+    host.appendChild(el);
+    const remove = () => el.remove();
+    el.animate(frames, { fill: 'forwards', ...options }).finished.then(remove, remove);
+    return el;
+  }
+
+  // A standing element that loops forever on its own random clock.
+  function standing(host, className, frames, duration, setup) {
+    const el = document.createElement('div');
+    el.className = className;
+    if (setup) setup(el);
+    host.appendChild(el);
+    el.animate(frames, { duration, delay: -Math.random() * duration, iterations: Infinity, easing: 'ease-in-out' });
+    return el;
+  }
+
+  const rand = (min, max) => min + Math.random() * (max - min);
+
+  // A shadow crossing the scene along a straight line, facing the way it goes.
+  function crossing(host, className, vw, vh, duration, setup) {
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const y0 = vh * rand(0.1, 0.8);
+    const y1 = y0 + vh * rand(-0.25, 0.25);
+    const x0 = dir > 0 ? -120 : vw + 120;
+    const x1 = dir > 0 ? vw + 120 : -120;
+    const heading = (Math.atan2(y1 - y0, x1 - x0) * 180) / Math.PI;
+    flyOnce(
+      host,
+      className,
+      [
+        { transform: `translate(${x0}px, ${y0}px) rotate(${heading}deg)` },
+        { transform: `translate(${(x0 + x1) / 2}px, ${(y0 + y1) / 2 + vh * rand(-0.05, 0.05)}px) rotate(${heading}deg)`, offset: 0.5 },
+        { transform: `translate(${x1}px, ${y1}px) rotate(${heading}deg)` },
+      ],
+      { duration, easing: 'linear' },
+      setup
+    );
+  }
+
+  // Drawn pointing along +x, so `crossing` can turn them to face their way.
+  const BIRD_SHADOW =
+    '<svg viewBox="0 0 40 40" aria-hidden="true"><g class="ev-wings"><path d="M22 20 C18 12 12 5 4 2 C10 9 13 15 15 20 C13 25 10 31 4 38 C12 35 18 28 22 20 Z"/></g>' +
+    '<path d="M12 20 C16 17 26 17 34 19.4 L38 20 L34 20.6 C26 23 16 23 12 20 Z"/><path d="M13 20 L6 17 L8 20 L6 23 Z"/></svg>';
+  const FISH_SHADOW =
+    '<svg viewBox="0 0 60 24" aria-hidden="true"><g class="ev-tail"><path d="M14 12 L2 4 L5 12 L2 20 Z"/></g>' +
+    '<path d="M12 12 C18 4 40 3 56 11 C57 11.6 57 12.4 56 13 C40 21 18 20 12 12 Z"/></svg>';
+
+  const SCENE_EVENTS = {
+    // Night: stars twinkling on their own clocks, and every so often one falls.
+    stars(host, vw, vh) {
+      const count = vw < 640 ? 10 : 16;
+      for (let i = 0; i < count; i++) {
+        standing(
+          host,
+          'ev-star',
+          [
+            { opacity: 0.15, transform: 'scale(0.55)' },
+            { opacity: 1, transform: 'scale(1)' },
+            { opacity: 0.15, transform: 'scale(0.55)' },
+          ],
+          rand(2200, 5200),
+          (el) => {
+            el.style.left = `${rand(0, 100)}%`;
+            el.style.top = `${rand(0, 55)}%`;
+            el.style.setProperty('--size', `${rand(4, 10).toFixed(1)}px`);
+          }
+        );
+      }
+      every(
+        4500,
+        11000,
+        () => {
+          const right = Math.random() < 0.5;
+          const x0 = vw * (right ? rand(0.05, 0.5) : rand(0.5, 0.95));
+          const y0 = vh * rand(0, 0.3);
+          const dist = vw * rand(0.22, 0.42);
+          const fall = (rand(22, 42) * Math.PI) / 180;
+          const dx = Math.cos(fall) * dist * (right ? 1 : -1);
+          const dy = Math.sin(fall) * dist;
+          const turn = (Math.atan2(dy, dx) * 180) / Math.PI;
+          flyOnce(
+            host,
+            'ev-meteor',
+            [
+              { transform: `translate(${x0}px, ${y0}px) rotate(${turn}deg) scaleX(0.2)`, opacity: 0 },
+              { transform: `translate(${x0 + dx * 0.3}px, ${y0 + dy * 0.3}px) rotate(${turn}deg) scaleX(1)`, opacity: 1, offset: 0.3 },
+              { transform: `translate(${x0 + dx}px, ${y0 + dy}px) rotate(${turn}deg) scaleX(0.5)`, opacity: 0 },
+            ],
+            { duration: rand(900, 1500), easing: 'cubic-bezier(0.3, 0.1, 0.6, 1)' }
+          );
+        },
+        2500
+      );
+    },
+
+    // Forest: shafts of sun through the canopy, slowly swaying, and now and
+    // then the shadow of a bird crossing the floor.
+    rays(host, vw, vh) {
+      const count = vw < 640 ? 3 : 5;
+      for (let i = 0; i < count; i++) {
+        const tilt = rand(24, 32);
+        standing(
+          host,
+          'ev-ray',
+          [
+            { opacity: 0.2, transform: `rotate(${tilt}deg) scaleX(0.85)` },
+            { opacity: 0.7, transform: `rotate(${tilt + 3}deg) scaleX(1.1)` },
+            { opacity: 0.2, transform: `rotate(${tilt}deg) scaleX(0.85)` },
+          ],
+          rand(9000, 16000),
+          (el) => {
+            el.style.left = `${-8 + i * (72 / count) + rand(0, 8)}%`;
+            el.style.setProperty('--ray-w', `${rand(7, 16).toFixed(1)}vmax`);
+          }
+        );
+      }
+      every(15000, 28000, () => crossing(host, 'ev-bird', vw, vh, rand(4500, 7000), (el) => (el.innerHTML = BIRD_SHADOW)), 6000);
+    },
+
+    // Ocean: caustic light rippling over the shallows — two tiled layers
+    // sliding against each other — and now and then a fish's shadow.
+    caustics(host, vw, vh) {
+      standing(host, 'ev-caustics', [{ transform: 'translate3d(0, 0, 0)' }, { transform: 'translate3d(400px, 400px, 0)' }], 46000);
+      standing(host, 'ev-caustics ev-caustics-b', [{ transform: 'translate3d(0, 0, 0)' }, { transform: 'translate3d(-560px, 560px, 0)' }], 61000);
+      every(10000, 20000, () => crossing(host, 'ev-fish', vw, vh, rand(7000, 11000), (el) => (el.innerHTML = FISH_SHADOW)), 3500);
+    },
+
+    // Meadow: big soft cloud shadows drifting over, and dandelion seeds
+    // floating by.
+    clouds(host, vw, vh) {
+      const cloud = (startAt) =>
+        flyOnce(
+          host,
+          'ev-cloud',
+          [
+            { transform: `translate(${-vw * 0.9}px, ${vh * rand(-0.2, 0.5)}px) scale(${rand(0.8, 1.2).toFixed(2)})` },
+            { transform: `translate(${vw * 1.05}px, ${vh * rand(-0.2, 0.5)}px) scale(${rand(0.8, 1.2).toFixed(2)})` },
+          ],
+          { duration: rand(26000, 38000), delay: startAt || 0, easing: 'linear' }
+        );
+      cloud(-rand(6000, 14000));
+      every(13000, 24000, () => cloud());
+      const seeds = vw < 640 ? 4 : 7;
+      for (let i = 0; i < seeds; i++) {
+        const y = vh * rand(0.1, 0.9);
+        const x = vw * rand(0, 1);
+        standing(
+          host,
+          'ev-seed',
+          [
+            { transform: `translate(${x - 60}px, ${y + 40}px) rotate(0deg)`, opacity: 0 },
+            { transform: `translate(${x}px, ${y}px) rotate(120deg)`, opacity: 0.9, offset: 0.3 },
+            { transform: `translate(${x + 90}px, ${y - 50}px) rotate(260deg)`, opacity: 0.9, offset: 0.7 },
+            { transform: `translate(${x + 150}px, ${y - 80}px) rotate(360deg)`, opacity: 0 },
+          ],
+          rand(14000, 24000)
+        );
+      }
+    },
+
+    // Sunset: a warm flare breathing at the top of the sky, and gusts lifting
+    // streaks of sand off the dunes.
+    sand(host, vw, vh) {
+      standing(
+        host,
+        'ev-flare',
+        [
+          { opacity: 0.45, transform: 'scale(0.92)' },
+          { opacity: 0.9, transform: 'scale(1.06)' },
+          { opacity: 0.45, transform: 'scale(0.92)' },
+        ],
+        9000
+      );
+      every(
+        6000,
+        12000,
+        () => {
+          const streaks = vw < 640 ? 9 : 16;
+          const lane = vh * rand(0.35, 0.75);
+          for (let i = 0; i < streaks; i++) {
+            const y = lane + vh * rand(-0.18, 0.18);
+            const lift = vh * rand(0.02, 0.08);
+            flyOnce(
+              host,
+              'ev-streak',
+              [
+                { transform: `translate(${-rand(40, 160)}px, ${y}px) scaleX(0.4)`, opacity: 0 },
+                { transform: `translate(${vw * 0.45}px, ${y - lift * 0.5}px) scaleX(1)`, opacity: 0.9, offset: 0.4 },
+                { transform: `translate(${vw + 60}px, ${y - lift}px) scaleX(0.6)`, opacity: 0 },
+              ],
+              { duration: rand(1300, 2300), delay: rand(0, 700), easing: 'cubic-bezier(0.4, 0, 0.6, 1)' },
+              (el) => el.style.setProperty('--len', `${rand(30, 90).toFixed(0)}px`)
+            );
+          }
+        },
+        2000
+      );
+    },
+
+    // Romance: soft, out-of-focus candle bokeh drifting, and small sparkles
+    // winking in the light.
+    bokeh(host, vw, vh) {
+      const discs = vw < 640 ? 6 : 10;
+      for (let i = 0; i < discs; i++) {
+        const x = vw * rand(0, 1);
+        const y = vh * rand(0, 1);
+        const dx = rand(-50, 50);
+        const dy = rand(-40, 40);
+        standing(
+          host,
+          'ev-bokeh',
+          [
+            { transform: `translate(${x}px, ${y}px) scale(0.9)`, opacity: 0.35 },
+            { transform: `translate(${x + dx}px, ${y + dy}px) scale(1.1)`, opacity: 0.9 },
+            { transform: `translate(${x}px, ${y}px) scale(0.9)`, opacity: 0.35 },
+          ],
+          rand(12000, 26000),
+          (el) => el.style.setProperty('--size', `${rand(36, 120).toFixed(0)}px`)
+        );
+      }
+      for (let i = 0; i < (vw < 640 ? 4 : 7); i++) {
+        standing(
+          host,
+          'ev-star ev-glint',
+          [
+            { opacity: 0, transform: 'scale(0.3) rotate(0deg)' },
+            { opacity: 0, transform: 'scale(0.3) rotate(0deg)', offset: 0.6 },
+            { opacity: 1, transform: 'scale(1) rotate(45deg)', offset: 0.8 },
+            { opacity: 0, transform: 'scale(0.3) rotate(90deg)' },
+          ],
+          rand(3500, 7000),
+          (el) => {
+            el.style.left = `${rand(2, 98)}%`;
+            el.style.top = `${rand(2, 98)}%`;
+            el.style.setProperty('--size', `${rand(8, 14).toFixed(1)}px`);
+          }
+        );
+      }
+    },
+  };
+
+  // Desktop only: the scene's layers shift a little against the pointer, the
+  // nearer ones more, so the backdrop has depth. Set on the three layers
+  // themselves (not :root), so only they restyle.
+  function initParallax() {
+    if (REDUCED_MOTION || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    const layers = [
+      [$('scene-backdrop'), 10],
+      [$('scene-events'), 22],
+      [$('scene-life'), 36],
+    ];
+    let frame = 0;
+    let px = 0;
+    let py = 0;
+    window.addEventListener(
+      'pointermove',
+      (e) => {
+        px = e.clientX / window.innerWidth - 0.5;
+        py = e.clientY / window.innerHeight - 0.5;
+        if (frame) return;
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          layers.forEach(([el, depth]) => {
+            if (el) el.style.setProperty('translate', `${(-px * depth).toFixed(1)}px ${(-py * depth * 0.7).toFixed(1)}px`);
+          });
+        });
+      },
+      { passive: true }
+    );
+  }
+
+  // Everything drawn from the window's size — the photo's orientation, where
+  // the wildlife and set pieces fly — is redone after a real resize, such as
+  // a phone turning on its side.
+  function initResize() {
+    let timer = 0;
+    let last = [window.innerWidth, window.innerHeight];
+    window.addEventListener('resize', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const [w, h] = [window.innerWidth, window.innerHeight];
+        const turned = (w > h) !== (last[0] > last[1]);
+        if (!turned && Math.abs(w - last[0]) / last[0] < 0.15 && Math.abs(h - last[1]) / last[1] < 0.15) return;
+        last = [w, h];
+        const theme = BOARD_THEMES[shownScene];
+        if (!theme) return;
+        if (turned) applyBackdrop(theme);
+        buildSceneLife(theme);
+        buildSceneEvents(theme);
+      }, 300);
+    });
+  }
+
   // Inline SVG textures on their own layers, each drifting or twinkling.
   function applyTextures(theme) {
     const url = (svg) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
@@ -820,28 +2125,23 @@
   // Draft roster the setup screen edits before the game starts.
   let roster = [];
 
-  const takenBy = (key, exclude) =>
-    roster.filter((player) => player !== exclude).map((player) => player[key]);
+  const takenColors = (exclude) =>
+    roster.filter((player) => player !== exclude).map((player) => player.color);
 
-  const firstFree = (choices, taken) => choices.find((choice) => !taken.includes(choice));
-
-  // Steps to the next option nobody else is using, so two players can never
-  // share an emoji or a colour.
-  function nextFree(choices, current, taken) {
-    const start = choices.indexOf(current);
-    for (let step = 1; step <= choices.length; step++) {
-      const candidate = choices[(start + step) % choices.length];
+  // Steps to the next colour nobody else is using, so two players can never
+  // share one — the colour is all that tells their pawns apart.
+  function nextFreeColor(current, taken) {
+    const start = COLOR_CHOICES.indexOf(current);
+    for (let step = 1; step <= COLOR_CHOICES.length; step++) {
+      const candidate = COLOR_CHOICES[(start + step) % COLOR_CHOICES.length];
       if (!taken.includes(candidate)) return candidate;
     }
     return current;
   }
 
   function defaultPlayer() {
-    return {
-      name: '',
-      emoji: firstFree(EMOJI_CHOICES, takenBy('emoji')),
-      color: firstFree(COLOR_CHOICES, takenBy('color')),
-    };
+    const taken = takenColors();
+    return { name: '', color: COLOR_CHOICES.find((color) => !taken.includes(color)) };
   }
 
   function initRoster() {
@@ -882,22 +2182,18 @@
       const row = document.createElement('div');
       row.className = 'player-row';
 
-      const num = document.createElement('span');
-      num.className = 'player-num';
-      num.setAttribute('aria-hidden', 'true');
-      num.textContent = String(index + 1).padStart(2, '0');
-      row.appendChild(num);
-
-      const emojiBtn = document.createElement('button');
-      emojiBtn.type = 'button';
-      emojiBtn.className = 'chip-btn';
-      emojiBtn.textContent = player.emoji;
-      emojiBtn.title = t('tapToChange');
-      emojiBtn.setAttribute('aria-label', t('changeFace', { n: index + 1 }));
-      emojiBtn.addEventListener('click', () => {
-        player.emoji = nextFree(EMOJI_CHOICES, player.emoji, takenBy('emoji', player));
-        emojiBtn.textContent = player.emoji;
-        pulse(emojiBtn, 'cycled');
+      // Tapping the swatch steps to the next free colour.
+      const colorBtn = document.createElement('button');
+      colorBtn.type = 'button';
+      colorBtn.className = 'chip-btn color-chip';
+      colorBtn.style.setProperty('--player-color', player.color);
+      colorBtn.title = t('changeColour', { n: index + 1 });
+      colorBtn.setAttribute('aria-label', t('changeColour', { n: index + 1 }));
+      colorBtn.addEventListener('click', () => {
+        player.color = nextFreeColor(player.color, takenColors(player));
+        colorBtn.style.setProperty('--player-color', player.color);
+        pulse(colorBtn, 'cycled');
+        soundPick();
       });
 
       const input = document.createElement('input');
@@ -910,21 +2206,8 @@
         player.name = input.value;
       });
 
-      const colorBtn = document.createElement('button');
-      colorBtn.type = 'button';
-      colorBtn.className = 'chip-btn color-chip';
-      colorBtn.style.background = player.color;
-      colorBtn.title = t('tapToChange');
-      colorBtn.setAttribute('aria-label', t('changeColour', { n: index + 1 }));
-      colorBtn.addEventListener('click', () => {
-        player.color = nextFree(COLOR_CHOICES, player.color, takenBy('color', player));
-        colorBtn.style.background = player.color;
-        pulse(colorBtn, 'cycled');
-      });
-
-      row.appendChild(emojiBtn);
-      row.appendChild(input);
       row.appendChild(colorBtn);
+      row.appendChild(input);
 
       if (roster.length > MIN_PLAYERS) {
         const removeBtn = document.createElement('button');
@@ -965,11 +2248,12 @@
       btn.textContent = loc(mode, 'label');
       btn.classList.toggle('selected', pendingMode === key);
       btn.setAttribute('aria-pressed', pendingMode === key);
+      // The one-line description that used to sit under the switch now
+      // rides along as the tooltip and accessible description.
+      btn.title = loc(mode, 'hint');
       btn.addEventListener('click', () => setPendingMode(key));
       container.appendChild(btn);
     });
-
-    $('mode-hint').textContent = loc(MODES[pendingMode], 'hint');
   }
 
   // Split from initThemeChips so a mode switch can redraw the chips (the
@@ -1045,23 +2329,28 @@
     );
     const setups = roster.map((player, i) => ({
       name: player.name.trim() || t('playerN', { n: i + 1 }),
-      emoji: player.emoji,
       color: player.color,
     }));
 
     state = freshState(setups, themes, pendingMode);
     logMessage(`🎉 ${setups.map((p) => p.name).join(' · ')}`);
     saveState();
+    // Start is a real tap: the moment the table's soundscape can come in.
+    ambienceWanted = true;
+    ensureAudio();
     showGameScreen();
+    updateAmbience();
   }
 
   function showSetupScreen() {
-    if (!pendingBoardTheme) pendingBoardTheme = randomBoardTheme();
+    if (!pendingBoardTheme) pendingBoardTheme = BOARD_THEMES[scenePref] ? scenePref : randomBoardTheme();
     applyBoardTheme(pendingBoardTheme);
     renderModeChoice();
     renderThemeChips();
+    syncScenePicker();
     $('setup-screen').classList.remove('hidden');
     $('game-screen').classList.add('hidden');
+    stopBoardMotion();
   }
 
   function showGameScreen() {
@@ -1077,6 +2366,7 @@
 
   function buildBoard() {
     const board = $('board');
+    stopBoardMotion();
     board.innerHTML = '';
     cellEls = {};
     tokenEls = [];
@@ -1100,17 +2390,23 @@
 
     decorateBoard(boardTheme());
 
+    cellEls[100].classList.add('cell-finish');
+
     const clip = document.createElement('div');
     clip.className = 'board-texture-clip';
     const boardPhoto = document.createElement('div');
     boardPhoto.className = 'board-photo';
     const texture = document.createElement('div');
     texture.className = 'board-texture';
+    const sheen = document.createElement('div');
+    sheen.className = 'board-sheen';
     clip.appendChild(boardPhoto);
     clip.appendChild(texture);
+    clip.appendChild(sheen);
     board.appendChild(clip);
     board.appendChild(buildConnections());
     applyTextures(boardTheme());
+    startBoardMotion();
 
     // Dropped once the deal has played out, so later re-renders (a restored
     // game, a resize) don't replay the whole board arriving.
@@ -1345,6 +2641,27 @@
           transform: `rotate(${(Math.atan2(dy, dx) * 180) / Math.PI} ${knot.x} ${knot.y})`,
         })
       );
+    });
+
+    // Now and then a glint runs up the lit edge of each rail, like light
+    // catching varnish — the same trick as the snakes' sheen, so every ladder
+    // and snake shares one set of keyframes.
+    [1, -1].forEach((side) => {
+      const p = along(0, side, lightSide * 0.3);
+      const q = along(1, side, lightSide * 0.3);
+      const sheen = svgEl('path', {
+        class: 'ladder-sheen',
+        d: `M ${p.x} ${p.y} L ${q.x} ${q.y}`,
+        pathLength: 100,
+        fill: 'none',
+        stroke: '#ffffff',
+        'stroke-opacity': 0.6,
+        'stroke-width': 0.2,
+        'stroke-linecap': 'round',
+        'stroke-dasharray': '8 192',
+      });
+      sheen.style.setProperty('--sheen-delay', `-${(from * 3 + (side > 0 ? 0 : 2)) % 11}s`);
+      group.appendChild(sheen);
     });
 
     // A nail where each rung meets each rail.
@@ -1709,16 +3026,6 @@
       })
     );
 
-    const face = svgEl('text', {
-      x: 20,
-      y: 15,
-      'text-anchor': 'middle',
-      'dominant-baseline': 'central',
-      'font-size': 12,
-    });
-    face.textContent = player.emoji;
-    svg.appendChild(face);
-
     return svg;
   }
 
@@ -1750,10 +3057,10 @@
 
     state.players.forEach((player, i) => {
       const token = tokenEl(i);
-      if (token.dataset.look !== `${player.color}|${player.emoji}`) {
+      if (token.dataset.look !== player.color) {
         token.innerHTML = '';
         token.appendChild(pawnSvg(player));
-        token.dataset.look = `${player.color}|${player.emoji}`;
+        token.dataset.look = player.color;
       }
 
       const col = i % perRow;
@@ -1766,18 +3073,31 @@
       const cell = cellEls[player.pos];
       if (cell && token.parentElement !== cell) cell.appendChild(token);
     });
+
+    // The square under whoever's turn it is breathes in their colour.
+    const mover = state.players[state.current];
+    const here = !state.finished && !animating && cellEls[mover.pos];
+    Object.values(cellEls).forEach((cell) => {
+      if (cell !== here) cell.classList.remove('cell-active');
+    });
+    if (here) {
+      here.style.setProperty('--player-color', mover.color);
+      here.classList.add('cell-active');
+    }
   }
 
   async function walkToken(playerIndex, from, to) {
     if (from === to) return;
     const step = to > from ? 1 : -1;
-    for (let pos = from + step; ; pos += step) {
+    for (let pos = from + step, n = 0; ; pos += step, n++) {
       const token = tokenEl(playerIndex);
       cellEls[pos].appendChild(token);
       token.classList.remove('hopping');
       void token.offsetWidth;
       token.classList.add('hopping');
-      soundStep();
+      // Each square lights briefly as the pawn passes: a trail of footsteps.
+      if (!REDUCED_MOTION) pulse(cellEls[pos], 'stepped');
+      soundStep(n);
       await sleep(STEP_MS);
       if (pos === to) break;
     }
@@ -1816,6 +3136,69 @@
     if (!cell || REDUCED_MOTION) return;
     replayAnimation(cell, 'landed');
     setTimeout(() => cell.classList.remove('landed'), 900);
+    // The landing ripples out: the eight squares around it lift in turn,
+    // the nearest first.
+    const index = CELL_INDEX[num];
+    const row = Math.floor(index / 10);
+    const col = index % 10;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const r = row + dr;
+        const c = col + dc;
+        if ((!dr && !dc) || r < 0 || r > 9 || c < 0 || c > 9) continue;
+        const neighbour = cellEls[CELL_ORDER[r * 10 + c]];
+        neighbour.style.setProperty('--ripple-delay', `${dr && dc ? 120 : 60}ms`);
+        pulse(neighbour, 'rippled');
+      }
+    }
+  }
+
+  // ---------- Board motion ----------
+  // The board is never quite still, but never busy either: a sheen sweeps
+  // across it now and then (CSS, .board-sheen), a few glints wink on random
+  // squares, the finish square shimmers, and the square under whoever's turn
+  // it is breathes in their colour. The glints are a handful of elements on
+  // their own random clocks, each moved to a new square between winks.
+  let glints = [];
+
+  function startBoardMotion() {
+    stopBoardMotion();
+    if (REDUCED_MOTION) return;
+    const layer = document.createElement('div');
+    layer.className = 'board-glints';
+    $('board').appendChild(layer);
+    const count = window.innerWidth < 640 ? 4 : 6;
+    for (let i = 0; i < count; i++) {
+      const glint = document.createElement('span');
+      glint.className = 'board-glint';
+      layer.appendChild(glint);
+      const wink = () => {
+        glint.style.left = `${5 + Math.random() * 90}%`;
+        glint.style.top = `${5 + Math.random() * 90}%`;
+        const size = 0.7 + Math.random() * 0.6;
+        const animation = glint.animate(
+          [
+            { opacity: 0, transform: 'translate(-50%, -50%) scale(0.2) rotate(0deg)' },
+            { opacity: 0.95, transform: `translate(-50%, -50%) scale(${size}) rotate(45deg)`, offset: 0.45 },
+            { opacity: 0, transform: 'translate(-50%, -50%) scale(0.3) rotate(90deg)' },
+          ],
+          { duration: 1300 + Math.random() * 900, delay: 500 + Math.random() * 4500, easing: 'ease-in-out' }
+        );
+        animation.onfinish = wink;
+        glints[i] = animation;
+      };
+      wink();
+    }
+  }
+
+  // Called before the board is rebuilt or left: a wink finishing on a
+  // detached glint would otherwise keep scheduling the next one forever.
+  function stopBoardMotion() {
+    glints.forEach((animation) => {
+      animation.onfinish = null;
+      animation.cancel();
+    });
+    glints = [];
   }
 
   // ---------- Rendering ----------
@@ -1825,6 +3208,8 @@
   // matter which of the eight surprise types or the answer flow caused it —
   // none of those call sites has to remember to trigger anything.
   let lastLove = null;
+  // Set while a change already has a sound of its own (an answered question).
+  let quietHearts = false;
 
   function renderAll() {
     if (!state) return;
@@ -1837,7 +3222,7 @@
         card.className = 'score-card';
         card.innerHTML =
           '<span class="score-swatch" aria-hidden="true"></span>' +
-          '<span class="score-emoji"></span><span class="score-name"></span>' +
+          '<span class="score-name"></span>' +
           '<svg class="icon icon-xs score-shield" role="img"><use href="#i-shield" /></svg>' +
           '<svg class="icon icon-xs score-frozen" role="img"><use href="#i-snow" /></svg>' +
           `<span class="score-points"><span class="pts-num"></span>${HEART_ICON}</span>`;
@@ -1848,7 +3233,6 @@
 
     state.players.forEach((player, i) => {
       const card = scores.children[i];
-      card.querySelector('.score-emoji').textContent = player.emoji;
       card.querySelector('.score-name').textContent = player.name;
       card.querySelector('.score-shield').setAttribute('aria-label', t('shieldUp'));
       card.querySelector('.score-frozen').setAttribute('aria-label', t('skipsNext'));
@@ -1862,21 +3246,19 @@
       if (typeof before === 'number' && before !== player.love) {
         pulse(card, 'bump');
         floatLove(card, player.love - before);
+        if (!quietHearts) soundHearts(player.love - before);
       }
     });
     lastLove = state.players.map((player) => player.love);
 
     const banner = $('turn-banner');
     const current = state.players[state.current];
-    const face = state.finished ? '🏁' : current.emoji;
     const label = state.finished ? t('gameOver') : current.name;
-    const showing = `${face}|${label}|${state.finished ? '' : current.color}`;
+    const showing = `${label}|${state.finished ? '' : current.color}`;
     if (banner.dataset.showing !== showing) {
-      banner.innerHTML =
-        '<span class="turn-swatch" aria-hidden="true"></span><span class="turn-emoji"></span><span class="turn-name"></span>';
+      banner.innerHTML = '<span class="turn-swatch" aria-hidden="true"></span><span class="turn-name"></span>';
       banner.querySelector('.turn-swatch').classList.toggle('hidden', state.finished);
       banner.style.setProperty('--player-color', current.color);
-      banner.querySelector('.turn-emoji').textContent = face;
       banner.querySelector('.turn-name').textContent = label;
       banner.dataset.showing = showing;
       pulse(banner, 'swap');
@@ -1969,7 +3351,7 @@
 
         const who = document.createElement('div');
         who.className = 'who';
-        who.textContent = `${entry.emoji || ''} ${entry.player} · ${themeLabel(entry.theme)}${entry.ai ? ' · AI' : ''}`;
+        who.textContent = `${entry.player} · ${themeLabel(entry.theme)}${entry.ai ? ' · AI' : ''}`;
 
         const q = document.createElement('div');
         q.className = 'q';
@@ -1996,7 +3378,7 @@
   function buildTranscript() {
     const lines = [];
     lines.push(t('transcriptTitle'));
-    lines.push(`${t('transcriptPlayers')}: ${state.players.map((p) => `${p.emoji} ${p.name}`).join('  ·  ')}`);
+    lines.push(`${t('transcriptPlayers')}: ${state.players.map((p) => p.name).join('  ·  ')}`);
     lines.push(`${t('transcriptMode')}: ${loc(MODES[state.mode] || MODES.couples, 'label')}`);
     lines.push(`${t('transcriptExported')}: ${new Date().toLocaleString(LANGUAGES[lang].htmlLang)}`);
     lines.push('');
@@ -2007,7 +3389,7 @@
     }
 
     state.answers.forEach((entry, i) => {
-      lines.push(`${i + 1}. ${entry.emoji || ''} ${entry.player} — ${themeLabel(entry.theme)}${entry.ai ? t('transcriptAi') : ''}`);
+      lines.push(`${i + 1}. ${entry.player} — ${themeLabel(entry.theme)}${entry.ai ? t('transcriptAi') : ''}`);
       lines.push(`   Q: ${entry.question}`);
       lines.push(`   A: ${entry.answer || (entry.answered ? t('answeredAloud') : t('skipped'))}`);
       lines.push('');
@@ -2052,9 +3434,11 @@
     $('dice').style.transform = `rotateX(${360 * diceSpins + rotX}deg) rotateY(${360 * diceSpins + rotY}deg)`;
   }
 
+  let diceThrow = 0;
+
   async function animateDice(value) {
     const overlay = $('dice-overlay');
-    overlay.classList.remove('hidden');
+    overlay.classList.remove('hidden', 'settled');
 
     // The cube must be painted at its current angle BEFORE the new rotation is
     // set, otherwise there is no start value and the transition never runs —
@@ -2064,13 +3448,77 @@
     overlay.classList.add('rolling');
     showDiceFace(value, true);
 
-    // The throw is 1.8s, every single turn, and the number was already decided
-    // before the die left the ground — so a tap anywhere cuts it short. Nothing
-    // about the outcome changes, only how long you wait to see it.
-    await untilTapOrTimeout(overlay, DICE_MS + 260);
+    // Dust on the first bounce, then a pop and a glow once it's still. A throw
+    // that has been skipped (or replaced by the next one) cancels both.
+    const throwId = ++diceThrow;
+    if (!REDUCED_MOTION) {
+      setTimeout(() => throwId === diceThrow && burstDice(), DICE_MS * DICE_IMPACTS[0]);
+      setTimeout(() => throwId === diceThrow && overlay.classList.add('settled'), DICE_MS * 0.93);
+    }
 
-    overlay.classList.remove('rolling');
+    // The throw takes about two seconds, every single turn, and the number was
+    // decided before the die left the hand — so a tap anywhere cuts it short.
+    // Nothing about the outcome changes, only how long you wait to see it.
+    await untilTapOrTimeout(overlay, DICE_MS + (REDUCED_MOTION ? 260 : 520));
+
+    diceThrow++;
+    overlay.classList.remove('rolling', 'settled');
     overlay.classList.add('hidden');
+    $('dice-burst').replaceChildren();
+  }
+
+  // Dust and glints kicked out along the ground where the die first lands,
+  // plus a ring spreading from the hit. Plain elements on the Web Animations
+  // API, gone as soon as they finish.
+  function burstDice() {
+    const host = $('dice-burst');
+    const size = $('dice').offsetWidth || 200;
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--rose').trim() || '#ffffff';
+    const colors = [accent, '#ffffff', '#fff3d6'];
+    const fling = (el, frames, duration) => {
+      host.appendChild(el);
+      const remove = () => el.remove();
+      // `forwards` holds the last (invisible) frame until the element is
+      // removed, so it can't flash back at its resting place for a frame.
+      el.animate(frames, { duration, easing: 'cubic-bezier(0.2, 0.6, 0.4, 1)', fill: 'forwards' }).finished.then(remove, remove);
+    };
+
+    const ring = document.createElement('span');
+    ring.className = 'dice-ring';
+    ring.style.width = `${size * 0.9}px`;
+    ring.style.height = `${size * 0.22}px`;
+    fling(
+      ring,
+      [
+        { transform: 'translate(-50%, -50%) scale(0.35)', opacity: 0.8 },
+        { transform: 'translate(-50%, -50%) scale(1.7)', opacity: 0 },
+      ],
+      650
+    );
+
+    for (let i = 0; i < 14; i++) {
+      const bit = document.createElement('span');
+      const d = 3 + Math.random() * 6;
+      bit.style.width = `${d}px`;
+      bit.style.height = `${d}px`;
+      bit.style.background = colors[i % colors.length];
+      // Spread over the ground plane: wide across, shallow in depth, with a
+      // little hop up on the way out.
+      const angle = (i / 14) * Math.PI * 2 + Math.random() * 0.4;
+      const reach = size * (0.45 + Math.random() * 0.45);
+      const dx = Math.cos(angle) * reach;
+      const dy = Math.sin(angle) * reach * 0.3;
+      const hop = size * (0.08 + Math.random() * 0.14);
+      fling(
+        bit,
+        [
+          { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+          { transform: `translate(calc(-50% + ${dx * 0.55}px), calc(-50% + ${dy * 0.55 - hop}px)) scale(0.9)`, opacity: 0.9, offset: 0.45 },
+          { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.3)`, opacity: 0 },
+        ],
+        550 + Math.random() * 400
+      );
+    }
   }
 
   function untilTapOrTimeout(el, ms) {
@@ -2170,7 +3618,7 @@
 
   function renderPowerSheet() {
     const me = state.players[state.current];
-    $('powers-player').textContent = `${me.emoji} ${me.name}`;
+    $('powers-player').textContent = me.name;
     $('powers-balance').textContent = me.love;
 
     // Rebuilding the list would drop keyboard focus; put it back where it was.
@@ -2233,11 +3681,18 @@
   function powerChoices(kind) {
     const wrap = document.createElement('div');
     wrap.className = 'power-choices';
-    const add = (label, aria, key, onPick) => {
+    // A rival's button carries their colour, the same mark as their pawn.
+    const add = (label, aria, key, onPick, color) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'choice-btn';
-      btn.textContent = label;
+      if (color) {
+        btn.innerHTML = '<span class="choice-swatch" aria-hidden="true"></span><span></span>';
+        btn.style.setProperty('--player-color', color);
+        btn.lastChild.textContent = label;
+      } else {
+        btn.textContent = label;
+      }
       btn.setAttribute('aria-label', aria);
       btn.dataset.focusKey = key;
       btn.addEventListener('click', onPick);
@@ -2257,7 +3712,7 @@
       TARGETS[kind]().forEach((i) => {
         const p = state.players[i];
         const detail = kind === 'heist' ? ` · ${t('heartsDetail', { n: p.love })}` : kind === 'freeze' ? '' : ` · ${p.pos}`;
-        add(`${p.emoji} ${p.name}${detail}`, `${powerName(kind)}: ${p.name}`, `target-${i}`, () => buyOn(kind, i));
+        add(`${p.name}${detail}`, `${powerName(kind)}: ${p.name}`, `target-${i}`, () => buyOn(kind, i), p.color);
       });
     }
     // The first choice takes focus so a keyboard user lands on the options.
@@ -2273,7 +3728,7 @@
     player.love -= POWERS[kind].cost;
     pickingPower = null;
     logMessage(`${message} (−${POWERS[kind].cost})`);
-    soundStep();
+    soundPower();
     saveState();
     renderAll();
   }
@@ -2611,6 +4066,7 @@
   function openQuestionModal() {
     $('answer-input').value = '';
     $('question-modal').classList.remove('hidden');
+    soundCardOpen();
     drawQuestion();
   }
 
@@ -2705,7 +4161,6 @@
     // Every question that comes up is recorded, answered or not.
     state.answers.push({
       player: player.name,
-      emoji: player.emoji,
       theme: currentQuestion.theme,
       question: currentQuestion.text,
       answer,
@@ -2717,13 +4172,18 @@
     if (answered) {
       player.love += 2;
       logMessage(`💗 ${player.name} +2`);
+      soundAnswer();
     } else {
       logMessage(t('log.skipped', { name: player.name }));
+      soundSkip();
     }
 
     $('question-modal').classList.add('hidden');
     saveState();
+    // The answer already has its own sound; the hearts it earns stay quiet.
+    quietHearts = true;
     renderAll();
+    quietHearts = false;
     advanceTurn();
   }
 
@@ -2733,6 +4193,7 @@
     $('surprise-icon').textContent = pendingSurprise.icon;
     $('surprise-text').textContent = surpriseText(pendingSurprise);
     $('surprise-modal').classList.remove('hidden');
+    soundSurprise(surpriseMood(pendingSurprise));
   }
 
   async function closeSurpriseModal() {
@@ -2887,7 +4348,7 @@
 
   function showWinModal(winnerIndex) {
     const winner = state.players[winnerIndex];
-    $('win-text').textContent = t('wins', { emoji: winner.emoji, name: winner.name });
+    $('win-text').textContent = t('wins', { name: winner.name });
 
     // A ranked list rather than one run-on line — with more than two players
     // the joined string was unreadable, and the winner didn't stand out in it.
@@ -2902,10 +4363,10 @@
         row.style.setProperty('--i', i);
         if (player === winner) row.classList.add('is-winner');
         row.innerHTML =
-          '<span class="rank"></span><span class="score-emoji"></span><span class="who"></span>' +
+          '<span class="rank"></span><span class="win-swatch" aria-hidden="true"></span><span class="who"></span>' +
           `<span class="pts"><span class="pts-num"></span>${HEART_ICON}</span>`;
         row.querySelector('.rank').textContent = i + 1;
-        row.querySelector('.score-emoji').textContent = player.emoji;
+        row.style.setProperty('--player-color', player.color);
         row.querySelector('.who').textContent = player.name;
         row.querySelector('.pts-num').textContent = player.love;
         summary.appendChild(row);
@@ -2915,7 +4376,7 @@
   }
 
   function playAgain() {
-    const setups = state.players.map((p) => ({ name: p.name, emoji: p.emoji, color: p.color }));
+    const setups = state.players.map((p) => ({ name: p.name, color: p.color }));
     // Keeps the mode this game was started in, rather than whatever the setup
     // screen was last left on.
     state = freshState(setups, state.themes, state.mode);
@@ -3100,10 +4561,12 @@
     en:
       'Write it in casual, natural English — the way a friend would ask it over coffee. ' +
       'Contractions are good. No therapist-speak, no survey phrasing, nothing stiff.',
+    // The same brief the static Indonesian bank was written to.
     id:
-      'Write it in casual, everyday spoken Indonesian (bahasa sehari-hari), the way friends chat — ' +
-      'use "kamu", never "Anda"; relaxed words like "nggak", "banget", "bareng" are welcome. ' +
-      'No formal or textbook phrasing, and do not include an English translation.',
+      'Write it in everyday spoken Indonesian, following this brief exactly: "Tulis pakai bahasa Indonesia ' +
+      'yang santai, asyik dibaca, dan nggak kaku, kayak lagi ngobrol sama teman." Use "kamu", never "Anda"; ' +
+      'casual forms like "nggak", "udah", "aja", "banget", "bareng", "gimana" and -in verbs (ceritain, ' +
+      'sebutin) are welcome. No formal or textbook phrasing, and no English translation.',
   };
 
   // Whole-word, case-insensitive: does this text name this player? Used by
@@ -3359,21 +4822,38 @@
     if (!LLM_PROVIDERS[aiConfig.provider]) aiConfig.provider = 'openrouter';
     loadLanguage();
     loadMode();
+    loadScenePref();
     initRoster();
     renderModeChoice();
     initThemeChips();
+    initScenePicker();
     applyLanguage();
     buildDice();
     $('lang-btn').addEventListener('click', () => setLanguage(nextLanguage()));
 
-    try {
-      setSound(localStorage.getItem(SOUND_KEY) !== 'off');
-    } catch (e) {
-      setSound(true);
-    }
-    $('sound-btn').addEventListener('click', () => {
-      setSound(!soundOn);
-      if (soundOn) soundStep();
+    initParallax();
+    initResize();
+    loadSoundMode();
+    syncSoundButtons();
+    document.querySelectorAll('.sound-toggle').forEach((btn) => btn.addEventListener('click', cycleSound));
+    // Audio may only start from a gesture; the first one anywhere unlocks it.
+    const unlock = () => {
+      window.removeEventListener('pointerdown', unlock, true);
+      window.removeEventListener('keydown', unlock, true);
+      unlockAudio();
+    };
+    window.addEventListener('pointerdown', unlock, true);
+    window.addEventListener('keydown', unlock, true);
+    // Nothing plays to a hidden tab: the ambience stops and the context sleeps.
+    document.addEventListener('visibilitychange', () => {
+      if (!audioCtx) return;
+      if (document.hidden) {
+        updateAmbience();
+        audioCtx.suspend();
+      } else if (soundOn()) {
+        audioCtx.resume();
+        updateAmbience();
+      }
     });
 
     $('add-player-btn').addEventListener('click', addPlayer);
@@ -3396,7 +4876,10 @@
     $('confirm-no-btn').addEventListener('click', closeConfirm);
 
     $('question-answered-btn').addEventListener('click', () => closeQuestionModal(true));
-    $('question-another-btn').addEventListener('click', drawQuestion);
+    $('question-another-btn').addEventListener('click', () => {
+      soundShuffle();
+      drawQuestion();
+    });
     $('question-skip-btn').addEventListener('click', () => closeQuestionModal(false));
     $('surprise-ok-btn').addEventListener('click', closeSurpriseModal);
     $('play-again-btn').addEventListener('click', playAgain);

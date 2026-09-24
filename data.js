@@ -7,19 +7,24 @@ const BOARD_SETUP = {
   surpriseChance: 0.25,
 };
 
-// One of these is picked at random for every new game. Each defines the page
-// backdrop AND the board surface, ladder and snake colours together, so the
-// board always sits in the same world as the background behind it.
+// The scenes the setup screen offers (plus Random, which draws a different one
+// every game). Each defines the page backdrop AND the board surface, ladder and
+// snake colours together, so the board always sits in the same world as the
+// background behind it.
 //
 // `life` is the scene's ambient wildlife (drifting petals, falling leaves,
 // bubbles, butterflies, dust motes, fireflies — drawn in script.js by
 // buildSceneLife), and `sunlight` the colour of the slow sunlight/moonlight wash
 // over the page. `backdrop`, when set, is a full-bleed photographic scene
 // ({ landscape, portrait } image paths) that replaces the tiled photo — see
-// scripts/generate-art.mjs, which makes them.
+// scripts/generate-art.mjs, which makes them. `swatch` paints the scene's
+// button in the setup picker, `events` names its occasional set pieces
+// (shooting stars, sun rays, cloud shadows… buildSceneEvents) and `ambience`
+// its synthesised soundscape (AMBIENCES in script.js).
 const BOARD_THEMES = {
   romance: {
     label: 'Romance',
+    label_id: 'Romantis',
     page: 'radial-gradient(1100px 620px at 50% -12%, #fff7f4 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #ecdfff 0%, transparent 58%), linear-gradient(160deg, #fdeef1 0%, #f5e8f7 52%, #ffeef0 100%)',
     pageBase: '#f5e8f7',
     boardBg: 'linear-gradient(155deg, #fffdf9, #fdf1ea)',
@@ -49,11 +54,16 @@ const BOARD_THEMES = {
     ornaments: ['💗', '✨', '🌸', '🌹', '🎀', '🍓'],
     life: { kind: 'petal', count: 22, colors: ['#f6b3c6', '#ee9ab3', '#fde0e8', '#f3c1cf'] },
     backdrop: { landscape: 'assets/scenes/romance-landscape.webp', portrait: 'assets/scenes/romance-portrait.webp' },
+    // The setup screen's picker swatch, painted to echo the backdrop photo.
+    swatch: 'radial-gradient(circle at 30% 24%, #fff3e6 0 14%, transparent 52%), linear-gradient(145deg, #f7d9dd, #eaa8b6 58%, #d98097)',
+    ambience: 'cafe',
+    events: 'bokeh',
     sunlight: 'rgba(255, 236, 240, 0.9)',
     startIcon: '💌', finishIcon: '💍',
   },
   forest: {
     label: 'Forest',
+    label_id: 'Hutan',
     page: 'radial-gradient(1100px 620px at 50% -12%, #f0f8ea 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #cfe6d4 0%, transparent 58%), linear-gradient(160deg, #e4f1dc 0%, #d5e9d6 52%, #eaf5e2 100%)',
     pageBase: '#d5e9d6',
     boardBg: 'linear-gradient(155deg, #fbfdf6, #e9f3e0)',
@@ -83,11 +93,16 @@ const BOARD_THEMES = {
     ornaments: ['🍃', '🌲', '🍄', '🌿', '🍂', '🐿️'],
     life: { kind: 'leaf', count: 18, colors: ['#6d8b35', '#8fa846', '#b58a3c', '#a36b2e'] },
     backdrop: { landscape: 'assets/scenes/forest-landscape.webp', portrait: 'assets/scenes/forest-portrait.webp' },
+    // The setup screen's picker swatch, painted to echo the backdrop photo.
+    swatch: 'radial-gradient(circle at 26% 20%, #f4f1b8 0 10%, transparent 48%), linear-gradient(150deg, #86b35f, #4f7f35 55%, #2f5a26)',
+    ambience: 'forest',
+    events: 'rays',
     sunlight: 'rgba(255, 244, 205, 0.85)',
     startIcon: '🌱', finishIcon: '🌳',
   },
   ocean: {
     label: 'Ocean',
+    label_id: 'Pantai',
     page: 'radial-gradient(1100px 620px at 50% -12%, #eaf7fb 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #c9e2f2 0%, transparent 58%), linear-gradient(160deg, #ddeff7 0%, #cfe4f2 52%, #e8f5fb 100%)',
     pageBase: '#cfe4f2',
     boardBg: 'linear-gradient(155deg, #f9fdff, #e2f0f9)',
@@ -115,6 +130,10 @@ const BOARD_THEMES = {
     ornaments: ['🐚', '⭐', '🫧', '🐠', '🌊', '🦀'],
     life: { kind: 'bubble', count: 22, colors: ['#ffffff'] },
     backdrop: { landscape: 'assets/scenes/ocean-landscape.webp', portrait: 'assets/scenes/ocean-portrait.webp' },
+    // The setup screen's picker swatch, painted to echo the backdrop photo.
+    swatch: 'linear-gradient(118deg, #4fc2d2 0 36%, #b9ecef 49%, #f6f1e6 61%, #ece2d0)',
+    ambience: 'shore',
+    events: 'caustics',
     sunlight: 'rgba(225, 248, 255, 0.85)',
     startIcon: '⚓', finishIcon: '🏝️',
     cellTexture:
@@ -122,6 +141,7 @@ const BOARD_THEMES = {
   },
   meadow: {
     label: 'Meadow',
+    label_id: 'Taman bunga',
     page: 'radial-gradient(1100px 620px at 50% -12%, #f8fce9 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #e0eec4 0%, transparent 58%), linear-gradient(160deg, #eff8dd 0%, #e6f2d4 52%, #f7fbe8 100%)',
     pageBase: '#e6f2d4',
     boardBg: 'linear-gradient(155deg, #fdfef7, #eef6dd)',
@@ -151,11 +171,16 @@ const BOARD_THEMES = {
     ornaments: ['🌼', '🦋', '🌿', '🐞', '🌾', '🌷'],
     life: { kind: 'butterfly', count: 8, colors: ['#f2b233', '#e98a3a', '#f7e27a', '#9ec4f0'] },
     backdrop: { landscape: 'assets/scenes/meadow-landscape.webp', portrait: 'assets/scenes/meadow-portrait.webp' },
+    // The setup screen's picker swatch, painted to echo the backdrop photo.
+    swatch: 'radial-gradient(circle at 68% 30%, #fffdf0 0 8%, transparent 9%), radial-gradient(circle at 32% 68%, #ffe14f 0 8%, transparent 9%), linear-gradient(160deg, #acd672, #6fa83d)',
+    ambience: 'meadow',
+    events: 'clouds',
     sunlight: 'rgba(255, 249, 214, 0.9)',
     startIcon: '🌻', finishIcon: '🐝',
   },
   sunset: {
     label: 'Sunset',
+    label_id: 'Senja',
     page: 'radial-gradient(1100px 620px at 50% -12%, #fff3e4 0%, transparent 62%), radial-gradient(900px 520px at 92% 104%, #f0d6ea 0%, transparent 58%), linear-gradient(160deg, #ffe9db 0%, #f8dde6 52%, #f4e2f2 100%)',
     pageBase: '#f8dde6',
     boardBg: 'linear-gradient(155deg, #fffaf3, #fbe9db)',
@@ -185,11 +210,16 @@ const BOARD_THEMES = {
     ornaments: ['🌇', '🕊️', '☁️', '🌅', '🐦', '✨'],
     life: { kind: 'mote', count: 26, colors: ['#ffd9a0', '#ffc27a', '#fff0d0'] },
     backdrop: { landscape: 'assets/scenes/sunset-landscape.webp', portrait: 'assets/scenes/sunset-portrait.webp' },
+    // The setup screen's picker swatch, painted to echo the backdrop photo.
+    swatch: 'linear-gradient(172deg, #ffe0b0 0%, #f7ad6f 44%, #dc7c4c 70%, #b65c3b)',
+    ambience: 'dunes',
+    events: 'sand',
     sunlight: 'rgba(255, 214, 170, 0.9)',
     startIcon: '🌤️', finishIcon: '🌆',
   },
   night: {
     label: 'Night',
+    label_id: 'Malam',
     // The one dark scene: white frost over it turns grey and unreadable, so the
     // UI glass flips to a dark tint with light text (see [data-glass] in style.css).
     glass: 'dark',
@@ -222,6 +252,10 @@ const BOARD_THEMES = {
     ornaments: ['✨', '🌙', '⭐', '🦉', '🌌', '🔭'],
     life: { kind: 'firefly', count: 26, colors: ['#f8f2a0', '#d8f59a', '#fff6c8'] },
     backdrop: { landscape: 'assets/scenes/night-landscape.webp', portrait: 'assets/scenes/night-portrait.webp' },
+    // The setup screen's picker swatch, painted to echo the backdrop photo.
+    swatch: 'radial-gradient(circle at 70% 28%, #fffbe0 0 5%, transparent 6%), radial-gradient(circle at 30% 62%, #cfd8ff 0 4%, transparent 5%), linear-gradient(160deg, #2e3868, #1b1d3c 60%, #0f1226)',
+    ambience: 'night',
+    events: 'stars',
     sunlight: 'rgba(170, 190, 255, 0.5)',
     startIcon: '🌠', finishIcon: '🌕',
   },
@@ -237,7 +271,7 @@ const MODES = {
     label: 'Couples',
     label_id: 'Pasangan',
     hint: 'Questions and dares written for two partners.',
-    hint_id: 'Pertanyaan dan tantangan buat kalian berdua.',
+    hint_id: 'Pertanyaan sama tantangan khusus buat kalian berdua.',
     subject: 'Two partners are playing a board game designed to bring them closer together.',
     guard: '',
     points: 'Love Points',
@@ -246,7 +280,7 @@ const MODES = {
     label: 'Friends',
     label_id: 'Teman',
     hint: 'Nothing romantic — written for friends playing together.',
-    hint_id: 'Tanpa yang romantis — buat main bareng teman.',
+    hint_id: 'Nggak ada yang romantis-romantis — pas buat main bareng teman.',
     subject:
       'A group of friends is playing a board game designed to help them know each other better.',
     guard:
@@ -258,15 +292,15 @@ const MODES = {
 // `friendsLabel` renames a theme in Friends mode where the couples wording
 // would be wrong. `color` marks the topic's swatch on its chip and question card.
 const QUESTION_THEMES = {
-  general: { label: 'General', label_id: 'Umum', color: '#3b7dd8' },
-  love: { label: 'Love', label_id: 'Cinta', friendsLabel_id: 'Kedekatan', friendsLabel: 'Closeness', color: '#d6336c' },
-  money: { label: 'Money', label_id: 'Uang', color: '#2f9e5b' },
-  dreams: { label: 'Dreams', label_id: 'Mimpi', color: '#8b5fbf' },
+  general: { label: 'General', label_id: 'Santai', color: '#3b7dd8' },
+  love: { label: 'Love', label_id: 'Cinta', friendsLabel_id: 'Akrab', friendsLabel: 'Closeness', color: '#d6336c' },
+  money: { label: 'Money', label_id: 'Duit', color: '#2f9e5b' },
+  dreams: { label: 'Dreams', label_id: 'Impian', color: '#8b5fbf' },
   dare: { label: 'Fun & Dare', label_id: 'Tantangan', color: '#e08a2c' },
-  deep: { label: 'Deep Talk', label_id: 'Curhat', color: '#2c7a7b' },
+  deep: { label: 'Deep Talk', label_id: 'Deep talk', color: '#2c7a7b' },
   memories: { label: 'Memories', label_id: 'Kenangan', color: '#b5763a' },
   home: { label: 'Home & Family', label_id: 'Keluarga', color: '#4a7f9e' },
-  growth: { label: 'Growth', label_id: 'Bertumbuh', color: '#5c9e46' },
+  growth: { label: 'Growth', label_id: 'Naik level', color: '#5c9e46' },
   gratitude: { label: 'Gratitude', label_id: 'Bersyukur', color: '#c2811f' },
   adventure: { label: 'Adventure', label_id: 'Petualangan', color: '#3d8f8f' },
   everyday: { label: 'Everyday', label_id: 'Sehari-hari', color: '#8a6a9e' },
@@ -1420,20 +1454,20 @@ const SURPRISES = [
     icon: '🔀',
     text: 'Swap places with your partner!',
     friends: 'Swap places with another player!',
-    text_id: 'Tukar tempat sama pasanganmu!',
-    friends_id: 'Tukar tempat sama pemain lain!',
+    text_id: 'Tukeran tempat sama pasanganmu!',
+    friends_id: 'Tukeran tempat sama pemain lain!',
     type: 'swapPositions',
   },
   { icon: '⬆️', text: 'Lucky you — jump ahead 4.', text_id: 'Lagi hoki — maju 4 kotak.', type: 'moveSelf', value: 4 },
   { icon: '⬇️', text: 'Oops, tripped — back 3.', text_id: 'Ups, kesandung — mundur 3.', type: 'moveSelf', value: -3 },
-  { icon: '🔁', text: 'Roll again!', text_id: 'Kocok lagi!', type: 'extraTurn' },
-  { icon: '⏸️', text: 'Take a breather — skip your next turn.', text_id: 'Istirahat dulu — lewat giliran berikutnya.', type: 'skipTurn', target: 'self' },
+  { icon: '🔁', text: 'Roll again!', text_id: 'Kocok sekali lagi!', type: 'extraTurn' },
+  { icon: '⏸️', text: 'Take a breather — skip your next turn.', text_id: 'Rehat dulu — giliran berikutnya kamu skip.', type: 'skipTurn', target: 'self' },
   {
     icon: '🚫',
     text: 'Your partner sits out their next turn!',
     friends: 'Another player sits out their next turn!',
-    text_id: 'Pasanganmu lewat giliran berikutnya!',
-    friends_id: 'Pemain lain lewat giliran berikutnya!',
+    text_id: 'Giliran pasanganmu berikutnya di-skip!',
+    friends_id: 'Giliran pemain lain berikutnya di-skip!',
     type: 'skipTurn',
     target: 'opponent',
   },
@@ -1441,8 +1475,8 @@ const SURPRISES = [
     icon: '💞',
     text: '+5 Love Points. Nice.',
     friends: '+5 points. Nice.',
-    text_id: '+5 Poin Cinta. Mantap.',
-    friends_id: '+5 poin. Mantap.',
+    text_id: '+5 Poin Cinta. Mantap!',
+    friends_id: '+5 poin. Mantap!',
     type: 'lovePoints',
     value: 5,
     target: 'self',
@@ -1451,8 +1485,8 @@ const SURPRISES = [
     icon: '💔',
     text: 'Ouch — lose 3 Love Points.',
     friends: 'Ouch — lose 3 points.',
-    text_id: 'Aduh — kurang 3 Poin Cinta.',
-    friends_id: 'Aduh — kurang 3 poin.',
+    text_id: 'Aduh — Poin Cinta kamu kurang 3.',
+    friends_id: 'Aduh — poinmu kurang 3.',
     type: 'lovePoints',
     value: -3,
     target: 'self',
@@ -1461,13 +1495,13 @@ const SURPRISES = [
     icon: '🤗',
     text: 'Go hug your partner. Right now.',
     friends: 'Hug the player on your left.',
-    text_id: 'Peluk pasanganmu. Sekarang juga.',
+    text_id: 'Peluk pasanganmu. Sekarang juga!',
     friends_id: 'Peluk pemain di sebelah kirimu.',
     type: 'action',
     bonus: 2,
   },
-  { icon: '😘', text: 'Kiss your partner on the cheek.', text_id: 'Cium pipi pasanganmu.', type: 'action', bonus: 2, only: 'couples' },
-  { icon: '📸', text: 'Snap a photo together.', text_id: 'Foto bareng, yuk.', type: 'action', bonus: 2 },
+  { icon: '😘', text: 'Kiss your partner on the cheek.', text_id: 'Cium pipi pasanganmu, dong.', type: 'action', bonus: 2, only: 'couples' },
+  { icon: '📸', text: 'Snap a photo together.', text_id: 'Foto bareng, yuk!', type: 'action', bonus: 2 },
   {
     icon: '🎁',
     text: 'Give 3 Love Points to your partner.',
@@ -1479,13 +1513,13 @@ const SURPRISES = [
   },
   { icon: '🍀', text: "You're on a roll — forward 6.", text_id: 'Lagi beruntung — maju 6.', type: 'moveSelf', value: 6 },
   { icon: '🎯', text: 'Forward 2.', text_id: 'Maju 2.', type: 'moveSelf', value: 2 },
-  { icon: '🌪️', text: 'Whoosh — blown back 5.', text_id: 'Wusss — kebawa angin, mundur 5.', type: 'moveSelf', value: -5 },
+  { icon: '🌪️', text: 'Whoosh — blown back 5.', text_id: 'Wusss — ketiup angin, mundur 5.', type: 'moveSelf', value: -5 },
   {
     icon: '🧲',
     text: "Magnet! Zip over to your partner's square.",
     friends: "Magnet! Zip over to another player's square.",
-    text_id: 'Magnet! Langsung pindah ke kotak pasanganmu.',
-    friends_id: 'Magnet! Langsung pindah ke kotak pemain lain.',
+    text_id: 'Magnet! Langsung nempel ke kotak pasanganmu.',
+    friends_id: 'Magnet! Langsung nempel ke kotak pemain lain.',
     type: 'joinPartner',
   },
   {
@@ -1503,8 +1537,8 @@ const SURPRISES = [
     icon: '💌',
     text: 'Your partner gets 4 Love Points — tell them why.',
     friends: 'Another player gets 4 points — tell them why.',
-    text_id: 'Pasanganmu dapat 4 Poin Cinta — bilang alasannya.',
-    friends_id: 'Pemain lain dapat 4 poin — bilang alasannya.',
+    text_id: 'Pasanganmu dapat 4 Poin Cinta — kasih tahu alasannya.',
+    friends_id: 'Pemain lain dapat 4 poin — kasih tahu alasannya.',
     type: 'lovePoints',
     value: 4,
     target: 'opponent',
@@ -1522,8 +1556,8 @@ const SURPRISES = [
     icon: '🎵',
     text: 'Play a song that reminds you of your partner.',
     friends: 'Play a song that reminds you of someone here.',
-    text_id: 'Putar lagu yang bikin kamu ingat pasanganmu.',
-    friends_id: 'Putar lagu yang bikin kamu ingat seseorang di sini.',
+    text_id: 'Setel lagu yang bikin kamu inget pasanganmu.',
+    friends_id: 'Setel lagu yang bikin kamu inget seseorang di sini.',
     type: 'action',
     bonus: 3,
   },
@@ -1540,8 +1574,8 @@ const SURPRISES = [
     icon: '🎭',
     text: "Act out your partner's go-to phrase.",
     friends: "Act out another player's go-to phrase.",
-    text_id: 'Peragakan kata-kata andalan pasanganmu.',
-    friends_id: 'Peragakan kata-kata andalan pemain lain.',
+    text_id: 'Tiruin kata-kata andalan pasanganmu.',
+    friends_id: 'Tiruin kata-kata andalan pemain lain.',
     type: 'action',
     bonus: 2,
   },
@@ -1549,7 +1583,7 @@ const SURPRISES = [
   {
     icon: '🙈',
     text: "Close your eyes and describe your partner's face.",
-    text_id: 'Tutup mata, terus gambarkan wajah pasanganmu.',
+    text_id: 'Tutup mata, terus gambarin wajah pasanganmu.',
     type: 'action',
     bonus: 2,
     only: 'couples',
@@ -1558,15 +1592,15 @@ const SURPRISES = [
     icon: '⭐',
     text: 'Name one thing your partner nailed today.',
     friends: 'Name one thing another player nailed today.',
-    text_id: 'Sebutin satu hal yang pasanganmu lakuin dengan keren hari ini.',
-    friends_id: 'Sebutin satu hal yang pemain lain lakuin dengan keren hari ini.',
+    text_id: 'Sebutin satu hal keren yang pasanganmu lakuin hari ini.',
+    friends_id: 'Sebutin satu hal keren yang pemain lain lakuin hari ini.',
     type: 'action',
     bonus: 2,
   },
   {
     icon: '🎤',
     text: 'The group gets to ask you one question. No dodging.',
-    text_id: 'Grup boleh nanya satu hal ke kamu. Nggak boleh ngeles.',
+    text_id: 'Grup boleh nanya satu hal ke kamu. Nggak boleh ngeles!',
     type: 'action',
     bonus: 3,
     only: 'friends',
@@ -1580,9 +1614,9 @@ const SURPRISES = [
     only: 'friends',
   },
   { icon: '🌈', text: 'Forward 3.', text_id: 'Maju 3.', type: 'moveSelf', value: 3 },
-  { icon: '🐢', text: 'Slow and steady — back 2.', text_id: 'Pelan-pelan aja — mundur 2.', type: 'moveSelf', value: -2 },
-  { icon: '🔥', text: "You're on fire — forward 5.", text_id: 'Lagi panas — maju 5.', type: 'moveSelf', value: 5 },
-  { icon: '🧊', text: 'Cold feet — back 4.', text_id: 'Mendadak ragu — mundur 4.', type: 'moveSelf', value: -4 },
+  { icon: '🐢', text: 'Slow and steady — back 2.', text_id: 'Pelan-pelan asal selamat — mundur 2.', type: 'moveSelf', value: -2 },
+  { icon: '🔥', text: "You're on fire — forward 5.", text_id: 'Lagi on fire — maju 5!', type: 'moveSelf', value: 5 },
+  { icon: '🧊', text: 'Cold feet — back 4.', text_id: 'Mendadak galau — mundur 4.', type: 'moveSelf', value: -4 },
   {
     icon: '🎈',
     text: '+2 Love Points.',
@@ -1597,8 +1631,8 @@ const SURPRISES = [
     icon: '🥶',
     text: 'Brr — lose 2 Love Points.',
     friends: 'Brr — lose 2 points.',
-    text_id: 'Brr — kurang 2 Poin Cinta.',
-    friends_id: 'Brr — kurang 2 poin.',
+    text_id: 'Brr — Poin Cinta kamu kurang 2.',
+    friends_id: 'Brr — poinmu kurang 2.',
     type: 'lovePoints',
     value: -2,
     target: 'self',
@@ -1629,14 +1663,14 @@ const SURPRISES = [
     friends_id: 'Reaksi berantai — lompat ke kotak pemain lain.',
     type: 'joinPartner',
   },
-  { icon: '🕺', text: 'Dance for 10 seconds. Music optional.', text_id: 'Joget 10 detik. Musik opsional.', type: 'action', bonus: 2 },
-  { icon: '🤳', text: 'Take a selfie together and describe it out loud.', text_id: 'Selfie bareng terus ceritain fotonya.', type: 'action', bonus: 2 },
+  { icon: '🕺', text: 'Dance for 10 seconds. Music optional.', text_id: 'Joget 10 detik. Musik nggak wajib.', type: 'action', bonus: 2 },
+  { icon: '🤳', text: 'Take a selfie together and describe it out loud.', text_id: 'Selfie bareng, terus ceritain fotonya.', type: 'action', bonus: 2 },
   {
     icon: '🎶',
     text: 'Hum a song — your partner has to guess it.',
     friends: 'Hum a song — the group has to guess it.',
-    text_id: 'Senandungkan lagu — pasanganmu harus nebak.',
-    friends_id: 'Senandungkan lagu — grup harus nebak.',
+    text_id: 'Senandungin satu lagu — pasanganmu harus nebak.',
+    friends_id: 'Senandungin satu lagu — grup harus nebak.',
     type: 'action',
     bonus: 2,
   },
@@ -1661,8 +1695,8 @@ const SURPRISES = [
     icon: '🦜',
     text: 'Do your best impression of your partner.',
     friends: 'Do your best impression of someone here.',
-    text_id: 'Tirukan pasanganmu sebisa mungkin.',
-    friends_id: 'Tirukan seseorang di sini sebisa mungkin.',
+    text_id: 'Tiruin gaya pasanganmu semirip mungkin.',
+    friends_id: 'Tiruin gaya seseorang di sini semirip mungkin.',
     type: 'action',
     bonus: 2,
   },
