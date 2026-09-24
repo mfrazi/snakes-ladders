@@ -2,7 +2,7 @@
 // that invalidates the old cache. Kept in sync by eye with the BUILD const
 // in script.js (they can't share a value directly: this file runs in a
 // separate worker context script.js never loads into).
-const CACHE_NAME = 'snakes-ladders-v23';
+const CACHE_NAME = 'snakes-ladders-v24';
 
 // NOTE: './' only — do not add './index.html'. Cloudflare canonicalises
 // /index.html to / with a 307, and cache.addAll() is unreliable for requests
@@ -13,7 +13,9 @@ const CORE_ASSETS = [
   './',
   './style.css',
   './script.js',
+  './i18n.js',
   './data.js',
+  './data-id.js',
   './manifest.json',
   './assets/textures/romance.webp',
   './assets/textures/forest.webp',
@@ -54,7 +56,8 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   // Never touch cross-origin requests — the AI feature calls
-  // api.anthropic.com / api.openai.com / generativelanguage.googleapis.com
+  // openrouter.ai / api.anthropic.com / api.openai.com /
+  // generativelanguage.googleapis.com
   // directly from the page, and those must always hit the real network.
   if (url.origin !== self.location.origin) return;
 

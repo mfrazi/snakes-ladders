@@ -11,9 +11,12 @@ Pick a mode before you start:
 - **Couples** — written for two partners
 - **Friends** — nothing romantic in it
 
-624 questions per mode across 12 topics, plus surprise cards, six board scenes,
-and sound. Installs as an app and works offline. Optionally, bring your own AI
-API key and every question is written fresh for the people playing.
+624 questions per mode across 12 topics, plus surprise cards, six living board
+scenes (drifting petals, falling leaves, bubbles, butterflies, fireflies), and
+sound. Play in **English** or **Bahasa Indonesia** — switch any time with the
+EN / ID toggle. Installs as an app and works offline. Optionally, bring your own
+AI API key (OpenRouter, Claude, OpenAI or Gemini) and every question is written
+fresh for the people playing, in the language you're playing in.
 
 ## How to play
 

@@ -6,20 +6,22 @@ and which of them will bite you if you "clean them up".
 
 ## Shape of the project
 
-Plain HTML/CSS/JS. No framework, no bundler, no module system. Four source
+Plain HTML/CSS/JS. No framework, no bundler, no module system. Six source
 files do everything:
 
 | File | What's in it |
 |---|---|
 | `index.html` | Markup, the SVG icon sprite, SEO/meta, the PWA manifest link |
 | `style.css` | Everything visual. One elevation ramp, theme variables at `:root` |
+| `i18n.js` | Interface strings, English and Indonesian (`I18N`, `LANGUAGES`) |
 | `data.js` | Content only — questions, surprises, board scenes, board density |
+| `data-id.js` | The Indonesian question bank (`QUESTIONS_ID`) |
 | `script.js` | All behaviour, wrapped in one IIFE |
 
-`data.js` has **no module system and no wrapping IIFE**. Its top-level
-`const BOARD_THEMES = …` (and friends) are real globals that `script.js` — a
-separate `<script>` tag, loaded after it — reaches by name. This matters for
-minification; see "Build" below.
+`i18n.js`, `data.js` and `data-id.js` have **no module system and no wrapping
+IIFE**. Their top-level `const BOARD_THEMES = …` (and friends) are real globals
+that `script.js` — a separate `<script>` tag, loaded after them — reaches by
+name. This matters for minification; see "Build" below.
 
 Local dev is `python3 serve.py` (port 8791). `npm run dev` runs the real
 Cloudflare Workers runtime instead, which is the only way to exercise
@@ -59,6 +61,48 @@ loads as Couples.
 `featureList`) and `manifest.json` are hardcoded.** They have gone stale once
 already. If you change the bank size meaningfully, update them.
 
+## Languages
+
+English and Indonesian. The choice is a device preference (`LANG_KEY` in
+`localStorage`), not part of the game, so it can change mid-game: the EN / ID
+switch sits in the "Playing as" header on the setup screen, and the two-letter
+button in the game header cycles it. First visit follows `navigator.language`.
+
+Where each kind of text lives:
+
+- **Interface strings:** `I18N` in `i18n.js`, read through `t(key, vars)`.
+  Static markup carries `data-i18n="key"` (textContent) or
+  `data-i18n-attr="title:key;aria-label:key"`; `applyLanguage()` walks both and
+  re-runs the render functions for everything drawn in JS. `{name}`
+  placeholders are filled by `t()` and still reach the DOM through
+  textContent, so a player name can't inject markup.
+- **Content labels** (modes, topics, surprises): an `_id` twin next to the
+  English field (`label_id`, `hint_id`, `text_id`, `friends_id`), read through
+  `loc(obj, field)`, which falls back to English.
+- **Questions:** `QUESTIONS_ID` in `data-id.js` mirrors `QUESTIONS` **line for
+  line** — same topics, same lists, same length, same order. `state.usedQuestions`
+  stores indexes, and this is what keeps them valid across a switch (and lets
+  an open question card change language in place). Add or remove a question in
+  one bank and you must do the same, at the same position, in the other. This
+  checks it:
+
+```bash
+node -e "const vm=require('vm'),fs=require('fs'),c={};vm.createContext(c);vm.runInContext(fs.readFileSync('data.js','utf8')+fs.readFileSync('data-id.js','utf8')+';this.Q=QUESTIONS;this.I=QUESTIONS_ID',c);for(const[t,v]of Object.entries(c.Q))for(const k of['shared','couples','friends'])if(v[k].length!==c.I[t][k].length)console.log('MISMATCH',t,k)"
+```
+
+The Indonesian partner-word check is the same as the English one with
+`/pasangan/i`.
+
+**Tone.** Every question is written the way friends talk — contractions,
+"be honest", "go", no survey or therapist phrasing. The Indonesian is everyday
+spoken Indonesian (`kamu`, `nggak`, `bareng`, `banget`), never the formal
+`Anda` register, and it's adapted rather than translated word for word (a
+"$500" becomes "5 juta", friends are a "geng"). Keep new lines in that voice.
+
+Log lines are translated when they're written, so a game's history keeps the
+language each move happened in. Recorded answers keep the question text as it
+was asked.
+
 ## Board scenes
 
 Six scenes in `BOARD_THEMES` (`data.js`), one picked at random per game. A
@@ -72,6 +116,35 @@ texture on each of 100 cells. Each drifts exactly one tile per cycle so the
 repeat stays seamless. All of it is off under `prefers-reduced-motion`.
 
 Add a scene by copying an entry and changing the colours.
+
+**Living layers.** On top of the textures, each scene has:
+
+- `life` — ambient wildlife drawn by `buildSceneLife()`: petals (romance),
+  leaves (forest), bubbles (ocean), butterflies (meadow), dust motes (sunset),
+  fireflies (night). Small inline SVGs on the Web Animations API, each on its
+  own random clock, 40% fewer under 640px wide. Glows are stacked translucent
+  discs, **not** CSS `filter`s — two dozen moving filtered layers are real work
+  for a phone's compositor.
+- `sunlight` — the colour of a slow soft-light wash from the top left
+  (`.scene-light`), breathing over 14s.
+- `backdrop` (optional) — `{ landscape, portrait }` full-bleed photographs.
+  `applyBackdrop()` decodes the image off-screen and only then sets
+  `data-backdrop="on"` on `<html>`, which fades it in with a slow push-in and
+  hides the tiled photo. A missing file just leaves the tiled texture, so a
+  scene without one looks exactly as before. They are **not** precached (a few
+  MB); the network-first worker caches whichever ones get played.
+  `scripts/generate-art.mjs` makes them through OpenRouter (default model
+  `google/gemini-3-pro-image`); see its header. **If you add backdrops,
+  re-run the glass contrast check against them** — the numbers below were
+  measured over the tiled textures, and `.scene-backdrop::after` (a 30% veil of
+  the scene's base colour) is the knob to turn if a photo is too busy.
+
+On the board, snakes idle: the head sways from the neck (`.snake-head`), the
+tongue flicks (`.snake-tongue`) and a glint runs down the back
+(`.snake-sheen`). Pivots are set per snake in board units, hence
+`transform-box: view-box`. Ornaments sway on per-cell clocks from the same
+hash that places them. Pawns have a radial gloss and a rim light. Everything
+here stops under `prefers-reduced-motion` (the tongue then rests out).
 
 **Ornaments.** `decorateBoard` scatters the scene's `ornaments` (six glyphs
 each) over roughly a third of the free squares, capped by `ORNAMENT_MAX`. A
@@ -294,7 +367,14 @@ that has to stay legible while it moves.
 ## AI questions (optional)
 
 With a key configured, every question tile generates a fresh line instead of
-drawing from the static bank. Most prompts are theme-only; about a third of the
+drawing from the static bank. Providers: **OpenRouter** (the default for a new
+setup — one key, any model; default `anthropic/claude-sonnet-5`), Claude,
+OpenAI and Gemini.
+
+The prompt itself stays in English (models follow English instructions most
+reliably); one line from `AI_VOICE` sets the output language and register —
+casual English, or casual spoken Indonesian with `kamu`, never `Anda`. The
+topic name is sent in English whatever the interface language. Most prompts are theme-only; about a third of the
 time (`AI_PERSONALIZE_CHANCE`) it weaves in something already answered.
 
 Two rules the prompts enforce, both aimed at the same failure mode — with 3+
@@ -317,7 +397,7 @@ parameter** Google's docs also show — a secret in a URL leaks into Referer
 headers, browser history and any proxy log in between. Don't "simplify" that
 back.
 
-The CSP's `connect-src` pins outbound requests to the three provider origins.
+The CSP's `connect-src` pins outbound requests to the four provider origins.
 If you add a provider, add its origin there too or its calls will be blocked.
 
 ## PWA
@@ -407,10 +487,11 @@ and still serves plain source — that's the everyday loop.
 log:** `curl -s https://<domain>/script.js | head -c 80` should be minified,
 and should not contain comments.
 
-**`data.js` needs `toplevel: false`.** Mangling top-level names would rename
-`BOARD_THEMES` in `data.js` while `script.js` kept asking for that literal
-identifier, silently breaking the app the moment mangle ran. It's terser's
-default, set explicitly so it can't change by accident.
+**`data.js`, `data-id.js` and `i18n.js` need `toplevel: false`.** Mangling
+top-level names would rename `BOARD_THEMES` in `data.js` while `script.js`
+kept asking for that literal identifier, silently breaking the app the moment
+mangle ran. It's terser's default, set explicitly so it can't change by
+accident.
 
 This has broken before: a rename swept through `package.json` and dropped the
 `build` script and its devDependencies, while `wrangler.jsonc`, `scripts/` and

@@ -35,10 +35,13 @@
   bootstraps from. Moving them up here just lets the preload scanner start
   fetching sooner, in parallel with the stylesheet instead of after it.
 -->
+<script defer src="i18n.js"></script>
 <script defer src="data.js"></script>
+<script defer src="data-id.js"></script>
 <script defer src="script.js"></script>
 
 <!-- Preconnect to AI provider APIs to accelerate DNS/TLS for first query -->
+<link rel="preconnect" href="https://openrouter.ai" crossorigin />
 <link rel="preconnect" href="https://api.anthropic.com" crossorigin />
 <link rel="preconnect" href="https://api.openai.com" crossorigin />
 <link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin />
@@ -109,7 +112,7 @@
   "applicationCategory": "GameApplication",
   "operatingSystem": "Any (web browser)",
   "browserRequirements": "Requires JavaScript.",
-  "inLanguage": "en",
+  "inLanguage": ["en", "id"],
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "image": "https://snakes-ladders.mfrazi.me/assets/og-cover.jpg",
@@ -119,7 +122,8 @@
     "600+ conversation questions across 12 topics",
     "42 surprise cards",
     "2 to 6 players on one device",
-    "Six randomly generated board scenes",
+    "Six living, randomly generated board scenes",
+    "Play in English or Bahasa Indonesia",
     "Optional AI-written questions using your own API key",
     "Downloadable transcript of every question and answer",
     "Installs as an app and works offline"
@@ -149,6 +153,10 @@
     <path d="M3 12a9 9 0 1 0 2.6-6.4" />
     <path d="M3 4v4h4" />
     <path d="M12 7.5V12l3 2" />
+  </symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
   </symbol>
   <symbol id="i-sparkle" viewBox="0 0 24 24">
     <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
@@ -264,9 +272,14 @@
   </div>
 </noscript>
 
-<!-- Animated scene texture, sits behind everything -->
+<!-- Animated scene, sits behind everything: an optional full-bleed photo
+     backdrop, the tiled photo texture, drawn detail, a slow sunlight wash and
+     the scene's drifting wildlife (petals, leaves, fireflies…). -->
+<div id="scene-backdrop" class="scene-backdrop" aria-hidden="true"></div>
 <div id="scene-photo" class="scene-photo"></div>
 <div id="scene-texture" class="scene-texture"></div>
+<div id="scene-light" class="scene-light" aria-hidden="true"></div>
+<div id="scene-life" class="scene-life" aria-hidden="true"></div>
 
 <!--
   The two screens below are the app's actual content — everything else
@@ -284,7 +297,11 @@
 
     <section class="field">
       <div class="field-head">
-        <h2 class="field-label">Playing as</h2>
+        <h2 class="field-label" data-i18n="playingAs">Playing as</h2>
+        <div class="lang-switch" role="group" data-i18n-attr="aria-label:language">
+          <svg class="icon icon-sm" aria-hidden="true"><use href="#i-globe" /></svg>
+          <div class="segmented segmented-mini" id="lang-choice"></div>
+        </div>
       </div>
       <div class="segmented" id="mode-choice"></div>
       <p class="field-note" id="mode-hint"></p>
@@ -292,33 +309,33 @@
 
     <section class="field">
       <div class="field-head">
-        <h2 class="field-label">Players</h2>
+        <h2 class="field-label" data-i18n="players">Players</h2>
       </div>
       <div id="player-list" class="player-list"></div>
       <div class="field-foot">
         <button type="button" id="add-player-btn" class="link-btn">
           <svg class="icon icon-sm"><use href="#i-plus" /></svg>
-          Add player
+          <span data-i18n="addPlayer">Add player</span>
         </button>
-        <span class="field-hint">Tap a face or colour to change it</span>
+        <span class="field-hint" data-i18n="tapHint">Tap a face or colour to change it</span>
       </div>
     </section>
 
     <section class="field">
       <div class="field-head">
-        <h2 class="field-label">Topics</h2>
+        <h2 class="field-label" data-i18n="topics">Topics</h2>
         <button type="button" id="theme-toggle-all" class="link-btn">Clear all</button>
       </div>
       <div class="theme-chips" id="theme-chips"></div>
     </section>
 
     <div class="setup-foot">
-      <button type="button" id="start-btn" class="primary-btn block-btn">Start game</button>
+      <button type="button" id="start-btn" class="primary-btn block-btn" data-i18n="startGame">Start game</button>
       <div class="setup-meta">
         <div class="setup-links">
           <button type="button" id="setup-ai-btn" class="link-btn">
             <svg class="icon icon-sm"><use href="#i-sparkle" /></svg>
-            AI questions
+            <span data-i18n="aiQuestions">AI questions</span>
           </button>
           <!--
             Hidden until it can actually do something. Chrome/Edge reveal it
@@ -329,7 +346,7 @@
           -->
           <button type="button" id="install-btn" class="link-btn hidden">
             <svg class="icon icon-sm"><use href="#i-install" /></svg>
-            Install app
+            <span data-i18n="installApp">Install app</span>
           </button>
         </div>
         <a
@@ -339,6 +356,7 @@
           class="link-btn icon-link"
           title="View source on GitHub"
           aria-label="View source on GitHub"
+          data-i18n-attr="title:viewSource;aria-label:viewSource"
         >
           <svg class="icon"><use href="#i-github" /></svg>
         </a>
@@ -351,16 +369,19 @@
 <section id="game-screen" class="screen hidden">
   <header class="game-header">
     <div class="header-tools">
-      <button type="button" id="sound-btn" class="icon-btn" title="Sound" aria-label="Sound">
+      <button type="button" id="lang-btn" class="icon-btn lang-btn" title="Switch language" aria-label="Switch language" data-i18n-attr="title:switchLanguage;aria-label:switchLanguage">
+        <span id="lang-btn-label" class="lang-btn-label">EN</span>
+      </button>
+      <button type="button" id="sound-btn" class="icon-btn" title="Sound" aria-label="Sound" data-i18n-attr="title:sound;aria-label:sound">
         <svg class="icon"><use id="sound-icon" href="#i-sound-on" /></svg>
       </button>
-      <button type="button" id="log-btn" class="icon-btn" title="History" aria-label="History">
+      <button type="button" id="log-btn" class="icon-btn" title="History" aria-label="History" data-i18n-attr="title:history;aria-label:history">
         <svg class="icon"><use href="#i-history" /></svg>
       </button>
-      <button type="button" id="ai-btn" class="icon-btn" title="AI questions" aria-label="AI questions">
+      <button type="button" id="ai-btn" class="icon-btn" title="AI questions" aria-label="AI questions" data-i18n-attr="title:aiQuestions;aria-label:aiQuestions">
         <svg class="icon"><use href="#i-sparkle" /></svg>
       </button>
-      <button type="button" id="new-game-btn" class="icon-btn" title="New game" aria-label="New game">
+      <button type="button" id="new-game-btn" class="icon-btn" title="New game" aria-label="New game" data-i18n-attr="title:newGame;aria-label:newGame">
         <svg class="icon"><use href="#i-restart" /></svg>
       </button>
       <a
@@ -370,6 +391,7 @@
         class="icon-btn"
         title="View source on GitHub"
         aria-label="View source on GitHub"
+        data-i18n-attr="title:viewSource;aria-label:viewSource"
       >
         <svg class="icon"><use href="#i-github" /></svg>
       </a>
@@ -386,7 +408,7 @@
       <div id="turn-banner" class="turn-banner" aria-live="polite"></div>
       <button type="button" id="roll-btn" class="primary-btn roll-btn">
         <svg class="icon"><use href="#i-dice" /></svg>
-        Roll
+        <span data-i18n="roll">Roll</span>
       </button>
     </div>
     <!--
@@ -396,8 +418,8 @@
     -->
     <div class="powers">
       <button type="button" id="powers-btn" class="power-btn" aria-haspopup="dialog">
-        <span class="power-name">Powers</span>
-        <span class="power-cost"><span class="power-cost-num" id="dock-hearts">0</span><svg class="icon icon-xs"><use href="#i-heart" /></svg><span class="visually-hidden"> hearts</span></span>
+        <span class="power-name" data-i18n="powers">Powers</span>
+        <span class="power-cost"><span class="power-cost-num" id="dock-hearts">0</span><svg class="icon icon-xs"><use href="#i-heart" /></svg> <span class="visually-hidden" data-i18n="hearts">hearts</span></span>
       </button>
       <p class="powers-status" id="powers-status" aria-live="polite"></p>
     </div>
@@ -413,7 +435,7 @@
     </div>
     <div class="dice-shadow"></div>
   </div>
-  <p class="dice-hint">Tap to skip</p>
+  <p class="dice-hint" data-i18n="tapToSkip">Tap to skip</p>
 </div>
 
 <!-- HEART POWERS -->
@@ -422,19 +444,16 @@
     <div class="powers-head">
       <div class="powers-head-text">
         <p class="modal-kicker" id="powers-player"></p>
-        <h2 class="modal-title" id="powers-title">Heart powers</h2>
+        <h2 class="modal-title" id="powers-title" data-i18n="heartPowers">Heart powers</h2>
       </div>
       <p class="powers-balance">
-        <span class="power-cost-num" id="powers-balance"></span><svg class="icon icon-sm"><use href="#i-heart" /></svg><span class="visually-hidden"> hearts</span>
+        <span class="power-cost-num" id="powers-balance"></span><svg class="icon icon-sm"><use href="#i-heart" /></svg> <span class="visually-hidden" data-i18n="hearts">hearts</span>
       </p>
     </div>
-    <p class="modal-sub">
-      Spend on your turn, before you roll. A <strong>re-roll</strong> costs
-      <span id="powers-reroll-cost"></span> and is offered when a roll would land you on a snake or past 100.
-    </p>
+    <p class="modal-sub" id="powers-sub"></p>
     <ul class="power-list" id="power-list"></ul>
     <div class="modal-actions">
-      <button type="button" id="powers-done-btn" class="primary-btn block-btn">Done</button>
+      <button type="button" id="powers-done-btn" class="primary-btn block-btn" data-i18n="done">Done</button>
     </div>
   </div>
 </div>
@@ -442,12 +461,12 @@
 <!-- RE-ROLL (offered only when the roll just thrown is a bad one) -->
 <div id="reroll-modal" class="modal-backdrop hidden">
   <div class="modal-box modal-narrow">
-    <p class="modal-kicker">Heart power</p>
+    <p class="modal-kicker" data-i18n="heartPower">Heart power</p>
     <h2 class="modal-title" id="reroll-title"></h2>
     <p class="modal-sub" id="reroll-body"></p>
     <div class="modal-actions">
       <button type="button" id="reroll-yes-btn" class="primary-btn block-btn">
-        Re-roll for <span class="power-cost-num">3</span><svg class="icon icon-sm"><use href="#i-heart" /></svg>
+        <span data-i18n="rerollFor">Re-roll for</span> <span class="power-cost-num">3</span><svg class="icon icon-sm"><use href="#i-heart" /></svg>
       </button>
       <button type="button" id="reroll-no-btn" class="ghost-btn"></button>
     </div>
@@ -459,15 +478,15 @@
   <div class="modal-box">
     <div id="question-theme-badge" class="theme-badge"></div>
     <p id="question-text" class="modal-question"></p>
-    <textarea id="answer-input" class="answer-input" rows="3" placeholder="Type your answer to keep it (optional)"></textarea>
+    <textarea id="answer-input" class="answer-input" rows="3" placeholder="Type your answer to keep it (optional)" data-i18n-attr="placeholder:answerPlaceholder"></textarea>
     <div class="modal-actions">
-      <button type="button" id="question-answered-btn" class="primary-btn block-btn">Answered</button>
+      <button type="button" id="question-answered-btn" class="primary-btn block-btn" data-i18n="answered">Answered</button>
       <div class="modal-row">
         <button type="button" id="question-another-btn" class="ghost-btn">
           <svg class="icon icon-sm"><use href="#i-shuffle" /></svg>
-          Another
+          <span data-i18n="another">Another</span>
         </button>
-        <button type="button" id="question-skip-btn" class="ghost-btn">Skip</button>
+        <button type="button" id="question-skip-btn" class="ghost-btn" data-i18n="skip">Skip</button>
       </div>
     </div>
   </div>
@@ -476,11 +495,11 @@
 <!-- SURPRISE -->
 <div id="surprise-modal" class="modal-backdrop hidden">
   <div class="modal-box">
-    <p class="modal-kicker">Surprise</p>
+    <p class="modal-kicker" data-i18n="surprise">Surprise</p>
     <div id="surprise-icon" class="surprise-icon"></div>
     <p id="surprise-text" class="modal-question"></p>
     <div class="modal-actions">
-      <button type="button" id="surprise-ok-btn" class="primary-btn block-btn">Got it</button>
+      <button type="button" id="surprise-ok-btn" class="primary-btn block-btn" data-i18n="gotIt">Got it</button>
     </div>
   </div>
 </div>
@@ -488,17 +507,17 @@
 <!-- WIN -->
 <div id="win-modal" class="modal-backdrop hidden">
   <div class="modal-box">
-    <p class="modal-kicker">Game over</p>
+    <p class="modal-kicker" data-i18n="gameOver">Game over</p>
     <h2 id="win-text" class="modal-title modal-title-lg"></h2>
     <div id="win-summary" class="win-summary"></div>
     <div class="modal-actions">
-      <button type="button" id="play-again-btn" class="primary-btn block-btn">Play again</button>
+      <button type="button" id="play-again-btn" class="primary-btn block-btn" data-i18n="playAgain">Play again</button>
       <div class="modal-row">
         <button type="button" id="win-download-btn" class="ghost-btn">
           <svg class="icon icon-sm"><use href="#i-download" /></svg>
-          Download
+          <span data-i18n="download">Download</span>
         </button>
-        <button type="button" id="new-players-btn" class="ghost-btn">New players</button>
+        <button type="button" id="new-players-btn" class="ghost-btn" data-i18n="newPlayers">New players</button>
       </div>
     </div>
   </div>
@@ -511,7 +530,7 @@
     <p class="modal-sub" id="confirm-body">This game's board and answers will be cleared.</p>
     <div class="modal-actions">
       <button type="button" id="confirm-yes-btn" class="primary-btn block-btn">Start over</button>
-      <button type="button" id="confirm-no-btn" class="ghost-btn">Keep playing</button>
+      <button type="button" id="confirm-no-btn" class="ghost-btn" data-i18n="keepPlaying">Keep playing</button>
     </div>
   </div>
 </div>
@@ -519,24 +538,24 @@
 <!-- AI SETTINGS -->
 <div id="ai-modal" class="modal-backdrop hidden">
   <div class="modal-box">
-    <h2 class="modal-title">AI questions</h2>
-    <p class="modal-sub">Questions written live for your game. Your key stays in this browser only.</p>
+    <h2 class="modal-title" data-i18n="aiQuestions">AI questions</h2>
+    <p class="modal-sub" data-i18n="aiSub">Questions written live for your game. Your key stays in this browser only.</p>
 
-    <label class="input-label" for="ai-providers">Provider</label>
+    <label class="input-label" for="ai-providers" data-i18n="provider">Provider</label>
     <div class="segmented" id="ai-providers"></div>
 
-    <label class="input-label" for="ai-key">API key</label>
+    <label class="input-label" for="ai-key" data-i18n="apiKey">API key</label>
     <input type="password" id="ai-key" class="answer-input" placeholder="sk-…" autocomplete="off" />
 
-    <label class="input-label" for="ai-model">Model</label>
+    <label class="input-label" for="ai-model" data-i18n="model">Model</label>
     <input type="text" id="ai-model" class="answer-input" placeholder="Model" />
 
     <div id="ai-test-status" class="ai-status"></div>
     <div class="modal-actions">
-      <button type="button" id="ai-save-btn" class="primary-btn block-btn">Save &amp; test</button>
+      <button type="button" id="ai-save-btn" class="primary-btn block-btn" data-i18n="saveTest">Save &amp; test</button>
       <div class="modal-row">
-        <button type="button" id="ai-clear-btn" class="ghost-btn">Clear</button>
-        <button type="button" id="ai-close-btn" class="ghost-btn">Close</button>
+        <button type="button" id="ai-clear-btn" class="ghost-btn" data-i18n="clear">Clear</button>
+        <button type="button" id="ai-close-btn" class="ghost-btn" data-i18n="close">Close</button>
       </div>
     </div>
   </div>
@@ -552,16 +571,16 @@
     </p>
     <ol class="install-steps" id="install-steps">
       <li>
-        Tap
+        <span data-i18n="installTap">Tap</span>
         <svg class="icon icon-sm install-step-icon"><use href="#i-share-ios" /></svg>
-        <strong>Share</strong> in Safari's toolbar
+        <strong data-i18n="installShare">Share</strong> <span data-i18n="installToolbar">in Safari's toolbar</span>
       </li>
-      <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
-      <li>Tap <strong>Add</strong> in the top-right corner</li>
+      <li><span data-i18n="installScroll">Scroll down and tap</span> <strong data-i18n="installAddHome">Add to Home Screen</strong></li>
+      <li><span data-i18n="installTap">Tap</span> <strong data-i18n="installAdd">Add</strong> <span data-i18n="installCorner">in the top-right corner</span></li>
     </ol>
     <p class="modal-sub" id="install-note"></p>
     <div class="modal-actions">
-      <button type="button" id="install-close-btn" class="primary-btn block-btn">Got it</button>
+      <button type="button" id="install-close-btn" class="primary-btn block-btn" data-i18n="gotIt">Got it</button>
     </div>
   </div>
 </div>
@@ -570,18 +589,18 @@
 <div id="log-drawer" class="log-drawer hidden">
   <div class="log-panel">
     <div class="log-head">
-      <h2 class="modal-title">History</h2>
+      <h2 class="modal-title" data-i18n="history">History</h2>
       <div class="log-head-actions">
-        <button type="button" id="log-download-btn" class="icon-btn" title="Download questions &amp; answers" aria-label="Download">
+        <button type="button" id="log-download-btn" class="icon-btn" title="Download questions &amp; answers" aria-label="Download" data-i18n-attr="title:downloadQa;aria-label:download">
           <svg class="icon"><use href="#i-download" /></svg>
         </button>
-        <button type="button" id="log-close-btn" class="icon-btn" title="Close" aria-label="Close">
+        <button type="button" id="log-close-btn" class="icon-btn" title="Close" aria-label="Close" data-i18n-attr="title:close;aria-label:close">
           <svg class="icon"><use href="#i-close" /></svg>
         </button>
       </div>
     </div>
     <div id="answer-log"></div>
-    <h2 class="field-label log-section">Moves</h2>
+    <h2 class="field-label log-section" data-i18n="moves">Moves</h2>
     <ul id="log-list"></ul>
   </div>
 </div>

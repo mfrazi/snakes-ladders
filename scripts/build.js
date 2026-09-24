@@ -56,6 +56,10 @@ async function main() {
 
   await minifyJsFile('script.js', { toplevel: false });
   await minifyJsFile('data.js', { toplevel: false });
+  // Same rule as data.js: plain globals (I18N, LANGUAGES, QUESTIONS_ID) that
+  // script.js reaches by name, so top-level names must survive untouched.
+  await minifyJsFile('i18n.js', { toplevel: false });
+  await minifyJsFile('data-id.js', { toplevel: false });
   await minifyJsFile('sw.js', { toplevel: false });
   minifyCssFile('style.css');
 

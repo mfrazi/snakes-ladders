@@ -3,12 +3,13 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-20c';
+  const BUILD = '2026-09-24a';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
   const SOUND_KEY = 'snakeLoveSound_v1';
   const MODE_KEY = 'snakeLoveMode_v1';
+  const LANG_KEY = 'snakeLoveLang_v1';
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
   // Kept comfortably longer than MAX_PLAYERS so there is always a free option
@@ -56,15 +57,18 @@
   // powers ask for a die face.
   const POWERS = {
     reroll: { cost: 2 },
-    shield: { cost: 4, name: 'Shield', icon: 'i-shield', desc: 'Your next snake can’t drop you.' },
-    boost: { cost: 4, steps: 3, name: 'Boost +3', icon: 'i-bolt', desc: 'Adds 3 to your next roll.' },
-    freeze: { cost: 5, name: 'Freeze', icon: 'i-snow', desc: 'A rival skips their next turn.', target: true },
-    rewind: { cost: 6, name: 'Rewind', icon: 'i-history', desc: 'Move a rival back 5 squares.', target: true },
-    heist: { cost: 8, take: 4, name: 'Heist', icon: 'i-mask', desc: 'Steal up to 4 hearts from a rival.', target: true },
-    loaded: { cost: 8, name: 'Loaded die', icon: 'i-dice', desc: 'Choose what your next roll shows.', pick: true },
-    charm: { cost: 13, name: 'Snake charmer', icon: 'i-charm', desc: 'Remove a snake ahead of you for good.', target: true },
-    swap: { cost: 20, name: 'Swap places', icon: 'i-swap', desc: 'Trade squares with a rival, right now.', target: true },
+    shield: { cost: 4, icon: 'i-shield' },
+    boost: { cost: 4, steps: 3, icon: 'i-bolt' },
+    freeze: { cost: 5, icon: 'i-snow', target: true },
+    rewind: { cost: 6, icon: 'i-history', target: true },
+    heist: { cost: 8, take: 4, icon: 'i-mask', target: true },
+    loaded: { cost: 8, icon: 'i-dice', pick: true },
+    charm: { cost: 13, icon: 'i-charm', target: true },
+    swap: { cost: 20, icon: 'i-swap', target: true },
   };
+  // Names and descriptions live in i18n.js as `power.<kind>.name` / `.desc`,
+  // so they follow the chosen language.
+  const powerName = (kind) => t(`power.${kind}.name`);
   // Ascending cost, so a new power slots in where its price puts it.
   const SHOP = ['shield', 'boost', 'freeze', 'rewind', 'heist', 'loaded', 'charm', 'swap'];
   // A steal is capped by the price (8 for at most 4), so a thief always loses
@@ -73,6 +77,23 @@
   const HEIST_MIN = 3;
 
   const $ = (id) => document.getElementById(id);
+
+  // ---------- Language ----------
+  // Interface strings come from I18N (i18n.js); content carries its own
+  // translations as `<field>_<lang>` (see loc) or, for questions, a parallel
+  // bank (QUESTIONS_ID in data-id.js). Language is a device preference rather
+  // than part of the game, so switching mid-game just re-labels everything.
+  let lang = 'en';
+
+  function t(key, vars) {
+    const table = I18N[lang] || I18N.en;
+    let text = key in table ? table[key] : key in I18N.en ? I18N.en[key] : key;
+    if (vars) text = text.replace(/\{(\w+)\}/g, (match, name) => (name in vars ? vars[name] : match));
+    return text;
+  }
+
+  // A content object's field in the active language, falling back to English.
+  const loc = (obj, field) => (lang !== 'en' && obj[`${field}_${lang}`]) || obj[field];
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // ---------- Board geometry ----------
@@ -140,9 +161,9 @@
 
   function loadAiConfig() {
     try {
-      return JSON.parse(localStorage.getItem(AI_KEY)) || { provider: 'claude', key: '', model: '' };
+      return JSON.parse(localStorage.getItem(AI_KEY)) || { provider: 'openrouter', key: '', model: '' };
     } catch (e) {
-      return { provider: 'claude', key: '', model: '' };
+      return { provider: 'openrouter', key: '', model: '' };
     }
   }
 
@@ -203,9 +224,101 @@
     renderRoster();
   }
 
+  // ---------- Language picker ----------
+  // First visit follows the browser (Indonesian if it asks for id/in, else
+  // English); after that the player's own choice sticks.
+  function loadLanguage() {
+    let saved = null;
+    try {
+      saved = localStorage.getItem(LANG_KEY);
+    } catch (e) {
+      /* storage unavailable */
+    }
+    if (saved && I18N[saved]) lang = saved;
+    else lang = /^(id|in)\b/i.test(navigator.language || '') ? 'id' : 'en';
+  }
+
+  function setLanguage(next) {
+    if (!I18N[next] || next === lang) return;
+    lang = next;
+    try {
+      localStorage.setItem(LANG_KEY, next);
+    } catch (e) {
+      /* storage unavailable */
+    }
+    applyLanguage();
+  }
+
+  function nextLanguage() {
+    const keys = Object.keys(LANGUAGES);
+    return keys[(keys.indexOf(lang) + 1) % keys.length];
+  }
+
+  function renderLanguageChoice() {
+    const container = $('lang-choice');
+    container.innerHTML = '';
+    Object.entries(LANGUAGES).forEach(([key, language]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = language.short;
+      btn.title = language.label;
+      btn.setAttribute('aria-label', language.label);
+      btn.setAttribute('lang', language.htmlLang);
+      btn.classList.toggle('selected', lang === key);
+      btn.setAttribute('aria-pressed', lang === key);
+      btn.addEventListener('click', () => setLanguage(key));
+      container.appendChild(btn);
+    });
+    $('lang-btn-label').textContent = LANGUAGES[lang].short;
+  }
+
+  // Re-labels everything already on screen. Static markup carries
+  // data-i18n (textContent) or data-i18n-attr ("attr:key;attr:key"); the
+  // rest is rebuilt by the same render functions that drew it.
+  function applyLanguage() {
+    document.documentElement.lang = LANGUAGES[lang].htmlLang;
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      el.textContent = t(el.dataset.i18n);
+    });
+    document.querySelectorAll('[data-i18n-attr]').forEach((el) => {
+      el.dataset.i18nAttr.split(';').forEach((pair) => {
+        const [attr, key] = pair.split(':');
+        el.setAttribute(attr, t(key));
+      });
+    });
+    $('powers-sub').textContent = t('powersSub', { cost: POWERS.reroll.cost });
+    renderLanguageChoice();
+    renderModeChoice();
+    renderThemeChips();
+    renderRoster();
+    if (!state) return;
+
+    renderAll();
+    if (!$('log-drawer').classList.contains('hidden')) renderLog();
+    if (pendingSurprise) $('surprise-text').textContent = surpriseText(pendingSurprise);
+    // A saved question sits at the same index in both banks, so the card on
+    // screen can follow the switch. An AI line stays as it was written.
+    if (currentQuestion && !$('question-modal').classList.contains('hidden')) {
+      setQuestionBadge(currentQuestion.theme, currentQuestion.ai);
+      if (typeof currentQuestion.index === 'number') {
+        const text = questionPool(currentQuestion.theme)[currentQuestion.index];
+        if (text) {
+          currentQuestion.text = text;
+          $('question-text').textContent = text;
+        }
+      }
+    }
+  }
+
   const themeOf = (key) => QUESTION_THEMES[key] || QUESTION_THEMES.general;
 
   function themeLabel(key) {
+    const theme = themeOf(key);
+    return (activeMode() === 'friends' && loc(theme, 'friendsLabel')) || loc(theme, 'label');
+  }
+
+  // English, whatever the interface language: it's what the model is told.
+  function themeLabelEn(key) {
     const theme = themeOf(key);
     return (activeMode() === 'friends' && theme.friendsLabel) || theme.label;
   }
@@ -214,7 +327,10 @@
   // in play. pickUnused() records indexes into this, which is safe because the
   // composition can't change mid-game — mode is fixed when the game starts.
   function questionPool(themeKey) {
-    const entry = QUESTIONS[themeKey] || {};
+    // The Indonesian bank mirrors the English one line for line, so indexes
+    // in state.usedQuestions stay valid across a language switch.
+    const bank = lang === 'id' && typeof QUESTIONS_ID !== 'undefined' ? QUESTIONS_ID : QUESTIONS;
+    const entry = bank[themeKey] || QUESTIONS[themeKey] || {};
     return (entry.shared || []).concat(entry[activeMode()] || []);
   }
 
@@ -226,7 +342,7 @@
   }
 
   const surpriseText = (surprise) =>
-    (activeMode() === 'friends' && surprise.friends) || surprise.text;
+    (activeMode() === 'friends' && surprise.friends && loc(surprise, 'friends')) || loc(surprise, 'text');
 
   // ---------- New game ----------
   function freshState(playerSetups, themes, mode) {
@@ -413,11 +529,158 @@
     root.setProperty('--die-edge', theme.frame);
     root.setProperty('--die-pip', theme.glass === 'dark' ? theme.ladder.light : theme.accentDeep);
     document.documentElement.dataset.glass = theme.glass || 'light';
+    root.setProperty('--sunlight', theme.sunlight || 'rgba(255, 245, 225, 0.8)');
+    applyBackdrop(theme);
+    buildSceneLife(theme);
 
     // Installed as a PWA, this tints the OS status bar / title bar to match
     // whichever scene is live, same as everything else in the app already does.
     const meta = $('theme-color-meta');
     if (meta) meta.setAttribute('content', theme.accent);
+  }
+
+  // ---------- Living scene ----------
+  // A full-bleed photographic backdrop, when the scene has one. It's loaded
+  // off-screen first and only swapped in once it has decoded, so a missing or
+  // slow file just leaves the tiled photo texture in place — nothing flashes.
+  let backdropToken = 0;
+
+  function applyBackdrop(theme) {
+    const layer = $('scene-backdrop');
+    const html = document.documentElement;
+    const token = ++backdropToken;
+    const art = theme.backdrop;
+    if (!layer || !art) {
+      delete html.dataset.backdrop;
+      return;
+    }
+    const portrait = window.matchMedia('(orientation: portrait)').matches;
+    const src = (portrait && art.portrait) || art.landscape || art.portrait;
+    const probe = new Image();
+    probe.onload = () => {
+      if (token !== backdropToken) return;
+      layer.style.setProperty('--scene-backdrop', `url("${src}")`);
+      html.dataset.backdrop = 'on';
+    };
+    probe.onerror = () => {
+      if (token === backdropToken) delete html.dataset.backdrop;
+    };
+    probe.src = src;
+  }
+
+  // The scene's ambient life: petals, leaves, bubbles, butterflies, dust or
+  // fireflies drifting over the backdrop. Each is a tiny inline SVG moved by
+  // the Web Animations API on its own random clock, so nothing lines up or
+  // visibly loops. Few enough (6–22) to stay cheap on a phone, and none at
+  // all under reduced motion.
+  const LIFE_SHAPES = {
+    petal: (color) => [
+      svgEl('path', { d: 'M12 2C17 6 18 14 12 22 6 14 7 6 12 2z', fill: color }),
+      svgEl('path', { d: 'M12 5v14', stroke: '#ffffff', 'stroke-opacity': 0.45, 'stroke-width': 0.8, fill: 'none' }),
+    ],
+    leaf: (color) => [
+      svgEl('path', { d: 'M3 21C3 10 10 3 21 3 21 14 14 21 3 21z', fill: color }),
+      svgEl('path', { d: 'M4 20 18 6', stroke: '#000000', 'stroke-opacity': 0.25, 'stroke-width': 0.9, fill: 'none' }),
+    ],
+    bubble: () => [
+      svgEl('circle', { cx: 12, cy: 12, r: 9, fill: '#ffffff', 'fill-opacity': 0.12, stroke: '#ffffff', 'stroke-opacity': 0.75, 'stroke-width': 1.2 }),
+      svgEl('ellipse', { cx: 8.5, cy: 8, rx: 2.6, ry: 1.6, fill: '#ffffff', 'fill-opacity': 0.8, transform: 'rotate(-35 8.5 8)' }),
+    ],
+    // Glow is drawn as stacked translucent discs rather than a CSS blur:
+    // twenty filtered, moving layers is real work for a phone's compositor.
+    mote: (color) => [
+      svgEl('circle', { cx: 12, cy: 12, r: 11, fill: color, 'fill-opacity': 0.14 }),
+      svgEl('circle', { cx: 12, cy: 12, r: 6, fill: color, 'fill-opacity': 0.35 }),
+      svgEl('circle', { cx: 12, cy: 12, r: 3, fill: '#fff8ea' }),
+    ],
+    firefly: (color) => [
+      svgEl('circle', { cx: 12, cy: 12, r: 12, fill: color, 'fill-opacity': 0.12 }),
+      svgEl('circle', { cx: 12, cy: 12, r: 6.5, fill: color, 'fill-opacity': 0.4 }),
+      svgEl('circle', { cx: 12, cy: 12, r: 2.8, fill: '#fffde8' }),
+    ],
+    butterfly: (color) => {
+      const wing = (side) => {
+        const g = svgEl('g', { class: `wing wing-${side}` });
+        const flip = side === 'l' ? '' : 'translate(24 0) scale(-1 1)';
+        g.appendChild(svgEl('path', { d: 'M12 11C8 3 1 3 2 9s6 5 10 3z', fill: color, transform: flip }));
+        g.appendChild(svgEl('path', { d: 'M12 13C7 13 3 17 6 20s6-2 6-6z', fill: color, 'fill-opacity': 0.85, transform: flip }));
+        return g;
+      };
+      return [wing('l'), wing('r'), svgEl('ellipse', { cx: 12, cy: 12.5, rx: 0.9, ry: 4, fill: '#3a2a1a' })];
+    },
+  };
+
+  function buildSceneLife(theme) {
+    const host = $('scene-life');
+    if (!host) return;
+    host.getAnimations({ subtree: true }).forEach((animation) => animation.cancel());
+    host.innerHTML = '';
+    host.dataset.kind = '';
+    const life = theme.life;
+    if (!life || REDUCED_MOTION || !LIFE_SHAPES[life.kind]) return;
+    host.dataset.kind = life.kind;
+
+    const small = window.innerWidth < 640;
+    const count = Math.round(life.count * (small ? 0.6 : 1));
+    const rand = (min, max) => min + Math.random() * (max - min);
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    for (let i = 0; i < count; i++) {
+      const color = life.colors[i % life.colors.length];
+      const size = life.kind === 'butterfly' ? rand(16, 26) : life.kind === 'bubble' ? rand(8, 22)
+        : life.kind === 'mote' || life.kind === 'firefly' ? rand(12, 22) : rand(10, 18);
+      const holder = document.createElement('div');
+      holder.className = 'life-bit';
+      const svg = svgEl('svg', { viewBox: '0 0 24 24', width: size, height: size, 'aria-hidden': 'true' });
+      LIFE_SHAPES[life.kind](color).forEach((node) => svg.appendChild(node));
+      holder.appendChild(svg);
+      host.appendChild(holder);
+
+      const x0 = rand(-0.05, 1.05) * vw;
+      const duration = rand(14000, 30000);
+      const delay = -rand(0, duration);
+      const sway = rand(30, 90) * (Math.random() < 0.5 ? -1 : 1);
+      let frames;
+      switch (life.kind) {
+        case 'petal':
+        case 'leaf': {
+          // Falls from above the top edge, rocking side to side as it tumbles.
+          const spin = rand(180, 540) * (Math.random() < 0.5 ? -1 : 1);
+          frames = [0, 0.25, 0.5, 0.75, 1].map((f, k) => ({
+            transform: `translate(${x0 + sway * Math.sin(f * Math.PI * 3) + f * sway}px, ${-40 + f * (vh + 80)}px) rotate(${spin * f}deg) rotateY(${k % 2 ? 60 : 0}deg)`,
+            opacity: k === 0 || k === 4 ? 0 : 0.85,
+          }));
+          break;
+        }
+        case 'bubble':
+          frames = [0, 0.33, 0.66, 1].map((f, k) => ({
+            transform: `translate(${x0 + Math.sin(f * Math.PI * 4) * 14}px, ${vh + 30 - f * (vh + 60)}px) scale(${0.8 + f * 0.4})`,
+            opacity: k === 0 ? 0 : k === 3 ? 0 : 0.8,
+          }));
+          break;
+        case 'butterfly': {
+          // Wanders across in lazy loops rather than a straight line.
+          const y0 = rand(0.1, 0.85) * vh;
+          const dir = Math.random() < 0.5 ? 1 : -1;
+          frames = [0, 0.2, 0.4, 0.6, 0.8, 1].map((f, k) => ({
+            transform: `translate(${(dir > 0 ? -40 : vw + 40) + dir * f * (vw + 80)}px, ${y0 + Math.sin(f * Math.PI * 4) * rand(30, 70)}px) rotate(${dir * (10 + Math.sin(f * 9) * 12)}deg)`,
+            opacity: k === 0 || k === 5 ? 0 : 0.95,
+          }));
+          holder.style.setProperty('--flap', `${rand(0.18, 0.3).toFixed(2)}s`);
+          break;
+        }
+        default: {
+          // Motes and fireflies drift and hang in the air, glowing on and off.
+          const y0 = rand(0.05, 0.95) * vh;
+          frames = [0, 0.25, 0.5, 0.75, 1].map((f, k) => ({
+            transform: `translate(${x0 + Math.sin(f * Math.PI * 2 + i) * rand(20, 60)}px, ${y0 - f * rand(40, 140)}px)`,
+            opacity: [0, 0.9, 0.35, 1, 0][k],
+          }));
+        }
+      }
+      holder.animate(frames, { duration, delay, iterations: Infinity, easing: 'linear' });
+    }
   }
 
   // Inline SVG textures on their own layers, each drifting or twinkling.
@@ -629,8 +892,8 @@
       emojiBtn.type = 'button';
       emojiBtn.className = 'chip-btn';
       emojiBtn.textContent = player.emoji;
-      emojiBtn.title = 'Tap to change';
-      emojiBtn.setAttribute('aria-label', `Change face for player ${index + 1}`);
+      emojiBtn.title = t('tapToChange');
+      emojiBtn.setAttribute('aria-label', t('changeFace', { n: index + 1 }));
       emojiBtn.addEventListener('click', () => {
         player.emoji = nextFree(EMOJI_CHOICES, player.emoji, takenBy('emoji', player));
         emojiBtn.textContent = player.emoji;
@@ -640,8 +903,8 @@
       const input = document.createElement('input');
       input.type = 'text';
       input.maxLength = 16;
-      input.placeholder = `Player ${index + 1}`;
-      input.setAttribute('aria-label', `Player ${index + 1} name`);
+      input.placeholder = t('playerN', { n: index + 1 });
+      input.setAttribute('aria-label', t('playerName', { n: index + 1 }));
       input.value = player.name;
       input.addEventListener('input', () => {
         player.name = input.value;
@@ -651,8 +914,8 @@
       colorBtn.type = 'button';
       colorBtn.className = 'chip-btn color-chip';
       colorBtn.style.background = player.color;
-      colorBtn.title = 'Tap to change';
-      colorBtn.setAttribute('aria-label', `Change colour for player ${index + 1}`);
+      colorBtn.title = t('tapToChange');
+      colorBtn.setAttribute('aria-label', t('changeColour', { n: index + 1 }));
       colorBtn.addEventListener('click', () => {
         player.color = nextFree(COLOR_CHOICES, player.color, takenBy('color', player));
         colorBtn.style.background = player.color;
@@ -667,8 +930,8 @@
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'chip-btn remove-chip';
-        removeBtn.title = 'Remove player';
-        removeBtn.setAttribute('aria-label', `Remove player ${index + 1}`);
+        removeBtn.title = t('removePlayer');
+        removeBtn.setAttribute('aria-label', t('removePlayerN', { n: index + 1 }));
         removeBtn.innerHTML = '<svg class="icon icon-sm"><use href="#i-close" /></svg>';
         removeBtn.addEventListener('click', () => {
           roster.splice(index, 1);
@@ -699,14 +962,14 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.dataset.mode = key;
-      btn.textContent = mode.label;
+      btn.textContent = loc(mode, 'label');
       btn.classList.toggle('selected', pendingMode === key);
       btn.setAttribute('aria-pressed', pendingMode === key);
       btn.addEventListener('click', () => setPendingMode(key));
       container.appendChild(btn);
     });
 
-    $('mode-hint').textContent = MODES[pendingMode].hint;
+    $('mode-hint').textContent = loc(MODES[pendingMode], 'hint');
   }
 
   // Split from initThemeChips so a mode switch can redraw the chips (the
@@ -773,7 +1036,7 @@
     });
     const total = container.querySelectorAll('.theme-chip').length;
     const on = container.querySelectorAll('.theme-chip.selected').length;
-    $('theme-toggle-all').textContent = on === total ? 'Clear all' : `Select all (${total - on})`;
+    $('theme-toggle-all').textContent = on === total ? t('clearAll') : t('selectAll', { n: total - on });
   }
 
   function startGame() {
@@ -781,7 +1044,7 @@
       (chip) => chip.dataset.theme
     );
     const setups = roster.map((player, i) => ({
-      name: player.name.trim() || `Player ${i + 1}`,
+      name: player.name.trim() || t('playerN', { n: i + 1 }),
       emoji: player.emoji,
       color: player.color,
     }));
@@ -905,6 +1168,10 @@
       span.textContent = ornaments[(h >>> 12) % ornaments.length];
       span.style.setProperty('--orn-rot', `${((h >>> 16) % 50) - 25}deg`);
       span.style.setProperty('--orn-scale', (0.8 + ((h >>> 20) % 45) / 100).toFixed(2));
+      // Each motif sways on its own clock, so the board breathes rather than
+      // pulsing in step.
+      span.style.setProperty('--orn-dur', `${5 + ((h >>> 4) % 5)}s`);
+      span.style.setProperty('--orn-delay', `-${(h >>> 6) % 7}s`);
       cell.appendChild(span);
       placed++;
     });
@@ -1153,7 +1420,7 @@
       return `M ${left.join(' L ')} L ${right.reverse().join(' L ')} Z`;
     };
 
-    const group = svgEl('g', { 'data-snake': from });
+    let group = svgEl('g', { 'data-snake': from });
     const clipId = `snake-clip-${from}`;
     const defs = svgEl('defs', {});
     const clip = svgEl('clipPath', { id: clipId });
@@ -1240,6 +1507,23 @@
         'stroke-linejoin': 'round',
       })
     );
+    // A brighter glint that runs down the back every few seconds, the way
+    // light catches scales when a snake shifts. pathLength normalises the
+    // dash maths so every snake uses the same keyframes whatever its length.
+    const sheen = svgEl('path', {
+      class: 'snake-sheen',
+      d: `M ${glint.join(' L ')}`,
+      pathLength: 100,
+      fill: 'none',
+      stroke: '#ffffff',
+      'stroke-opacity': 0.55,
+      'stroke-width': 0.26,
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      'stroke-dasharray': '9 191',
+    });
+    sheen.style.setProperty('--sheen-delay', `-${(from * 7) % 9}s`);
+    group.appendChild(sheen);
     group.appendChild(
       svgEl('path', {
         d: ribbon(1, 0),
@@ -1274,8 +1558,24 @@
       `C ${H(0.8, -1.4)} ${H(0.3, -1.05)} ${H(-0.4, -0.95)} Z`;
     const heading = (Math.atan2(fy, fx) * 180) / Math.PI;
 
+    // Everything from here on is the head, in its own group so it can sway
+    // gently from the neck, with the tongue flicking in and out on its own
+    // clock. Both pivots are in board units (transform-box: view-box).
+    const neck = at(0, 0);
+    const headGroup = svgEl('g', { class: 'snake-head' });
+    headGroup.style.setProperty('transform-origin', `${neck.x}px ${neck.y}px`);
+    headGroup.style.setProperty('--head-delay', `-${(from * 3) % 5}s`);
+    const tongueRoot = at(3.2, 0);
+    const tongue = svgEl('g', { class: 'snake-tongue' });
+    tongue.style.setProperty('transform-origin', `${tongueRoot.x}px ${tongueRoot.y}px`);
+    tongue.style.setProperty('--heading', `${heading}deg`);
+    tongue.style.setProperty('--tongue-delay', `-${(from * 5) % 7}s`);
+    headGroup.appendChild(tongue);
+    const bodyGroup = group;
+    group = headGroup;
+
     // Tongue first, so the snout sits over its root.
-    group.appendChild(
+    tongue.appendChild(
       svgEl('path', {
         d:
           `M ${H(3.2, 0)} Q ${H(3.8, 0.12)} ${H(4.05, 0.04)} ` +
@@ -1345,7 +1645,8 @@
       group.appendChild(svgEl('circle', { cx: nostril.x, cy: nostril.y, r: hw0 * 0.05, fill: '#150e08', 'fill-opacity': 0.7 }));
     });
 
-    svg.appendChild(group);
+    bodyGroup.appendChild(headGroup);
+    svg.appendChild(bodyGroup);
   }
 
   // ---------- Pawns ----------
@@ -1356,6 +1657,20 @@
     const dark = shade(player.color, -0.42);
     const light = shade(player.color, 0.38);
 
+    // Lacquered-wood shading: a radial light from the top left over the
+    // player's colour, so the piece reads as turned and glossy, not flat.
+    const gradId = `pawn-gloss-${player.color.slice(1)}`;
+    const defs = svgEl('defs', {});
+    const grad = svgEl('radialGradient', { id: gradId, cx: '35%', cy: '28%', r: '75%' });
+    [
+      [0, light],
+      [0.45, player.color],
+      [1, shade(player.color, -0.3)],
+    ].forEach(([offset, color]) => grad.appendChild(svgEl('stop', { offset, 'stop-color': color })));
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+    const fill = `url(#${gradId})`;
+
     svg.appendChild(
       svgEl('ellipse', { cx: 20, cy: 47, rx: 14, ry: 4.4, fill: dark, 'fill-opacity': 0.32 })
     );
@@ -1363,7 +1678,7 @@
     svg.appendChild(
       svgEl('path', {
         d: 'M6 46 Q6 40 13 37.5 Q9 33 12.5 28 Q16 24 20 24 Q24 24 27.5 28 Q31 33 27 37.5 Q34 40 34 46 Z',
-        fill: player.color,
+        fill,
         stroke: dark,
         'stroke-width': 2,
         'stroke-linejoin': 'round',
@@ -1373,7 +1688,14 @@
       svgEl('ellipse', { cx: 20, cy: 24.5, rx: 9.5, ry: 3, fill: dark, 'fill-opacity': 0.45 })
     );
     svg.appendChild(
-      svgEl('circle', { cx: 20, cy: 15, r: 11, fill: player.color, stroke: dark, 'stroke-width': 2 })
+      svgEl('circle', { cx: 20, cy: 15, r: 11, fill, stroke: dark, 'stroke-width': 2 })
+    );
+    // A thin rim of reflected light on the shadow side of the head and base.
+    svg.appendChild(
+      svgEl('path', { d: 'M28.5 20.5a10 10 0 0 1-9 5', fill: 'none', stroke: light, 'stroke-opacity': 0.55, 'stroke-width': 1.1, 'stroke-linecap': 'round' })
+    );
+    svg.appendChild(
+      svgEl('path', { d: 'M9 44.5Q9.5 41 14 39.5', fill: 'none', stroke: light, 'stroke-opacity': 0.5, 'stroke-width': 1.2, 'stroke-linecap': 'round' })
     );
     svg.appendChild(
       svgEl('ellipse', {
@@ -1516,8 +1838,8 @@
         card.innerHTML =
           '<span class="score-swatch" aria-hidden="true"></span>' +
           '<span class="score-emoji"></span><span class="score-name"></span>' +
-          '<svg class="icon icon-xs score-shield" role="img" aria-label="Shield up"><use href="#i-shield" /></svg>' +
-          '<svg class="icon icon-xs score-frozen" role="img" aria-label="Skips next turn"><use href="#i-snow" /></svg>' +
+          '<svg class="icon icon-xs score-shield" role="img"><use href="#i-shield" /></svg>' +
+          '<svg class="icon icon-xs score-frozen" role="img"><use href="#i-snow" /></svg>' +
           `<span class="score-points"><span class="pts-num"></span>${HEART_ICON}</span>`;
         scores.appendChild(card);
       });
@@ -1528,6 +1850,8 @@
       const card = scores.children[i];
       card.querySelector('.score-emoji').textContent = player.emoji;
       card.querySelector('.score-name').textContent = player.name;
+      card.querySelector('.score-shield').setAttribute('aria-label', t('shieldUp'));
+      card.querySelector('.score-frozen').setAttribute('aria-label', t('skipsNext'));
       card.querySelector('.pts-num').textContent = player.love;
       card.style.setProperty('--player-color', player.color);
       card.classList.toggle('active', state.current === i && !state.finished);
@@ -1545,7 +1869,7 @@
     const banner = $('turn-banner');
     const current = state.players[state.current];
     const face = state.finished ? '🏁' : current.emoji;
-    const label = state.finished ? 'Game over' : current.name;
+    const label = state.finished ? t('gameOver') : current.name;
     const showing = `${face}|${label}|${state.finished ? '' : current.color}`;
     if (banner.dataset.showing !== showing) {
       banner.innerHTML =
@@ -1625,15 +1949,15 @@
     answers.innerHTML = '';
 
     if (!state.answers.length) {
-      answers.innerHTML =
-        '<h2 class="field-label">Questions</h2>' +
-        '<p class="log-empty">Nothing yet — land on a question square to start.</p>';
+      answers.innerHTML = '<h2 class="field-label"></h2><p class="log-empty"></p>';
+      answers.querySelector('.field-label').textContent = t('questions');
+      answers.querySelector('.log-empty').textContent = t('logEmpty');
       return;
     }
 
     const heading = document.createElement('h2');
     heading.className = 'field-label';
-    heading.textContent = `Questions (${state.answers.length})`;
+    heading.textContent = t('questionsN', { n: state.answers.length });
     answers.appendChild(heading);
 
     state.answers
@@ -1657,7 +1981,7 @@
           a.textContent = entry.answer;
         } else {
           a.classList.add('muted');
-          a.textContent = entry.answered ? 'Answered out loud' : 'Skipped';
+          a.textContent = entry.answered ? t('answeredAloud') : t('skipped');
         }
 
         box.appendChild(who);
@@ -1671,21 +1995,21 @@
   // downloadable so a couple can keep what they told each other.
   function buildTranscript() {
     const lines = [];
-    lines.push('Snakes & Ladders — Love & Friends Edition');
-    lines.push(`Players: ${state.players.map((p) => `${p.emoji} ${p.name}`).join('  ·  ')}`);
-    lines.push(`Mode: ${(MODES[state.mode] || MODES.couples).label}`);
-    lines.push(`Exported: ${new Date().toLocaleString()}`);
+    lines.push(t('transcriptTitle'));
+    lines.push(`${t('transcriptPlayers')}: ${state.players.map((p) => `${p.emoji} ${p.name}`).join('  ·  ')}`);
+    lines.push(`${t('transcriptMode')}: ${loc(MODES[state.mode] || MODES.couples, 'label')}`);
+    lines.push(`${t('transcriptExported')}: ${new Date().toLocaleString(LANGUAGES[lang].htmlLang)}`);
     lines.push('');
 
     if (!state.answers.length) {
-      lines.push('(No questions came up this game.)');
+      lines.push(t('transcriptNone'));
       return lines.join('\n');
     }
 
     state.answers.forEach((entry, i) => {
-      lines.push(`${i + 1}. ${entry.emoji || ''} ${entry.player} — ${themeLabel(entry.theme)}${entry.ai ? ' (AI-personalized)' : ''}`);
+      lines.push(`${i + 1}. ${entry.emoji || ''} ${entry.player} — ${themeLabel(entry.theme)}${entry.ai ? t('transcriptAi') : ''}`);
       lines.push(`   Q: ${entry.question}`);
-      lines.push(`   A: ${entry.answer || (entry.answered ? 'Answered out loud' : 'Skipped')}`);
+      lines.push(`   A: ${entry.answer || (entry.answered ? t('answeredAloud') : t('skipped'))}`);
       lines.push('');
     });
 
@@ -1835,10 +2159,10 @@
     $('powers-btn').disabled = !canUsePowers() || !modalsClosed();
 
     const armed = [];
-    if (me.shield) armed.push('Shield on');
-    if (me.boost) armed.push(`Boost +${POWERS.boost.steps}`);
-    if (me.loaded) armed.push(`Next roll ${me.loaded}`);
-    if (armedThisTurn.freeze !== null) armed.push(`${state.players[armedThisTurn.freeze].name} frozen`);
+    if (me.shield) armed.push(t('shieldOn'));
+    if (me.boost) armed.push(t('boostOn', { n: POWERS.boost.steps }));
+    if (me.loaded) armed.push(t('nextRoll', { n: me.loaded }));
+    if (armedThisTurn.freeze !== null) armed.push(t('frozenOn', { name: state.players[armedThisTurn.freeze].name }));
     $('powers-status').textContent = armed.join(' · ');
 
     if (!$('powers-modal').classList.contains('hidden')) renderPowerSheet();
@@ -1865,22 +2189,22 @@
         `<svg class="icon power-icon" aria-hidden="true"><use href="#${power.icon}" /></svg>` +
         '<div class="power-text"><span class="power-title"></span><span class="power-desc"></span></div>' +
         '<button type="button" class="power-buy"></button>';
-      row.querySelector('.power-title').textContent = power.name;
-      row.querySelector('.power-desc').textContent = powerNote(kind, status) || power.desc;
+      row.querySelector('.power-title').textContent = powerName(kind);
+      row.querySelector('.power-desc').textContent = powerNote(kind, status) || t(`power.${kind}.desc`);
 
       const buy = row.querySelector('.power-buy');
       buy.dataset.focusKey = `buy-${kind}`;
       if (status === 'refundable') {
-        buy.textContent = 'Cancel';
-        buy.setAttribute('aria-label', `Cancel ${power.name} and get ${power.cost} hearts back`);
+        buy.textContent = t('cancel');
+        buy.setAttribute('aria-label', t('cancelAria', { power: powerName(kind), cost: power.cost }));
       } else if (status === 'active') {
-        buy.textContent = 'Active';
+        buy.textContent = t('active');
         buy.disabled = true;
       } else {
         buy.innerHTML = `<span class="power-cost-num"></span>${HEART_ICON}`;
         buy.querySelector('.power-cost-num').textContent = power.cost;
         buy.disabled = status !== 'buyable';
-        buy.setAttribute('aria-label', `${power.name}, ${power.cost} hearts`);
+        buy.setAttribute('aria-label', t('buyAria', { power: powerName(kind), cost: power.cost }));
         buy.setAttribute('aria-expanded', String(pickingPower === kind));
       }
       buy.addEventListener('click', () => onPowerBuy(kind));
@@ -1895,22 +2219,14 @@
     }
   }
 
-  const NO_TARGET_NOTE = {
-    freeze: 'Every rival is already skipping a turn.',
-    rewind: 'No rivals have left the start.',
-    swap: 'Everyone is on your square.',
-    heist: `No rival has ${HEIST_MIN} hearts to steal.`,
-    charm: 'There are no snakes left ahead of you.',
-  };
-
   function powerNote(kind, status) {
     const me = state.players[state.current];
-    if (status === 'active' && kind === 'shield') return 'On until you meet a snake.';
-    if (status === 'refundable' && kind === 'loaded') return `Your next roll will be a ${me.loaded}.`;
+    if (status === 'active' && kind === 'shield') return t('shieldActive');
+    if (status === 'refundable' && kind === 'loaded') return t('loadedNote', { n: me.loaded });
     if (status === 'refundable' && kind === 'freeze') {
-      return `${state.players[armedThisTurn.freeze].name} skips their next turn.`;
+      return t('freezeNote', { name: state.players[armedThisTurn.freeze].name });
     }
-    if (status === 'none') return NO_TARGET_NOTE[kind] || '';
+    if (status === 'none') return t(`none.${kind}`, { n: HEIST_MIN });
     return '';
   }
 
@@ -1929,19 +2245,19 @@
     };
 
     if (kind === 'loaded') {
-      for (let n = 1; n <= 6; n++) add(String(n), `Roll a ${n}`, `pick-${n}`, () => buyLoaded(n));
+      for (let n = 1; n <= 6; n++) add(String(n), t('rollA', { n }), `pick-${n}`, () => buyLoaded(n));
     } else if (kind === 'charm') {
       snakesAhead().forEach((head) => {
         const tail = state.snakes[head];
-        add(`${head} → ${tail}`, `Charm the snake on ${head}, which drops to ${tail}`, `snake-${head}`, () =>
+        add(`${head} → ${tail}`, t('charmAria', { head, tail }), `snake-${head}`, () =>
           buyCharm(head)
         );
       });
     } else {
       TARGETS[kind]().forEach((i) => {
         const p = state.players[i];
-        const detail = kind === 'heist' ? ` · ${p.love} hearts` : kind === 'freeze' ? '' : ` · ${p.pos}`;
-        add(`${p.emoji} ${p.name}${detail}`, `${POWERS[kind].name}: ${p.name}`, `target-${i}`, () => buyOn(kind, i));
+        const detail = kind === 'heist' ? ` · ${t('heartsDetail', { n: p.love })}` : kind === 'freeze' ? '' : ` · ${p.pos}`;
+        add(`${p.emoji} ${p.name}${detail}`, `${powerName(kind)}: ${p.name}`, `target-${i}`, () => buyOn(kind, i));
       });
     }
     // The first choice takes focus so a keyboard user lands on the options.
@@ -1984,7 +2300,7 @@
 
     player[kind] = true;
     armedThisTurn[kind] = true;
-    spend(kind, kind === 'shield' ? `🛡️ ${player.name} raised a shield` : `⚡ ${player.name} boosted the next roll`);
+    spend(kind, t(kind === 'shield' ? 'log.shield' : 'log.boost', { name: player.name }));
   }
 
   function buyLoaded(n) {
@@ -1992,7 +2308,7 @@
     const player = state.players[state.current];
     player.loaded = n;
     armedThisTurn.loaded = true;
-    spend('loaded', `🎯 ${player.name} loaded the die to ${n}`);
+    spend('loaded', t('log.loadedDie', { name: player.name, n }));
   }
 
   function buyOn(kind, target) {
@@ -2009,7 +2325,7 @@
     const take = Math.min(POWERS.heist.take, other.love);
     other.love -= take;
     player.love += take;
-    spend('heist', `💘 ${player.name} stole ${take} from ${other.name}`);
+    spend('heist', t('log.heist', { name: player.name, n: take, other: other.name }));
   }
 
   // Removing a snake changes the board for everyone, so it's permanent and
@@ -2022,7 +2338,7 @@
     closePowers();
     turnBusy = true;
     animating = true;
-    spend('charm', `🐍 ${player.name} charmed the snake on ${head}`);
+    spend('charm', t('log.charm', { name: player.name, n: head }));
     await fadeSnake(head);
     animating = false;
     turnBusy = false;
@@ -2046,7 +2362,7 @@
     const player = state.players[state.current];
     state.players[target].skipNext = true;
     armedThisTurn.freeze = target;
-    spend('freeze', `❄️ ${player.name} froze ${state.players[target].name}`);
+    spend('freeze', t('log.freeze', { name: player.name, other: state.players[target].name }));
   }
 
   async function buyRewind(target) {
@@ -2056,7 +2372,7 @@
     closePowers();
     turnBusy = true;
     animating = true;
-    spend('rewind', `⏪ ${player.name} rewound ${other.name} by 5`);
+    spend('rewind', t('log.rewind', { name: player.name, other: other.name }));
     const newPos = Math.max(1, other.pos - 5);
     await travelToken(target, other.pos, newPos);
     other.pos = newPos;
@@ -2075,7 +2391,7 @@
     closePowers();
     turnBusy = true;
     animating = true;
-    spend('swap', `🔀 ${player.name} swapped places with ${other.name}`);
+    spend('swap', t('log.swap', { name: player.name, other: other.name }));
     const [mine, theirs] = [player.pos, other.pos];
     await Promise.all([travelToken(state.current, mine, theirs), travelToken(target, theirs, mine)]);
     player.pos = theirs;
@@ -2088,7 +2404,7 @@
 
   function refundPower(kind) {
     const player = state.players[state.current];
-    const { cost, name } = POWERS[kind];
+    const { cost } = POWERS[kind];
     if (kind === 'freeze') {
       state.players[armedThisTurn.freeze].skipNext = false;
       armedThisTurn.freeze = null;
@@ -2097,7 +2413,7 @@
       armedThisTurn[kind] = false;
     }
     player.love += cost;
-    logMessage(`↩️ ${player.name} cancelled ${name} (+${cost})`);
+    logMessage(t('log.cancel', { name: player.name, power: powerName(kind), cost }));
     soundStep();
     saveState();
     renderAll();
@@ -2129,15 +2445,15 @@
   let rerollChoice = null;
 
   function offerReroll(player, roll, bonus, trouble) {
-    const thrown = bonus ? `${roll} (+${bonus} boost)` : `${roll}`;
+    const thrown = bonus ? t('boostedRoll', { roll, bonus }) : `${roll}`;
     if (trouble.kind === 'snake') {
-      $('reroll-title').textContent = 'Snake ahead';
-      $('reroll-body').textContent = `You rolled ${thrown}. That lands on the snake at ${trouble.from}, which drops you to ${trouble.to}.`;
-      $('reroll-no-btn').textContent = 'Take the snake';
+      $('reroll-title').textContent = t('snakeAhead');
+      $('reroll-body').textContent = t('snakeAheadBody', { roll: thrown, from: trouble.from, to: trouble.to });
+      $('reroll-no-btn').textContent = t('takeSnake');
     } else {
-      $('reroll-title').textContent = 'Too far';
-      $('reroll-body').textContent = `You rolled ${thrown}, but you need exactly ${100 - player.pos} to finish.`;
-      $('reroll-no-btn').textContent = 'Stay put';
+      $('reroll-title').textContent = t('tooFar');
+      $('reroll-body').textContent = t('tooFarBody', { roll: thrown, n: 100 - player.pos });
+      $('reroll-no-btn').textContent = t('stayPut');
     }
     $('reroll-modal').classList.remove('hidden');
     return new Promise((resolve) => {
@@ -2181,7 +2497,7 @@
         // The shield is spent and the slide never happens — the pawn stays on
         // the snake's head, and nothing further down the chain applies.
         player.shield = false;
-        logMessage(`🛡️ ${player.name}'s shield stopped the snake on ${hop.from}`);
+        logMessage(t('log.shieldStop', { name: player.name, n: hop.from }));
         soundLadder();
         break;
       }
@@ -2202,7 +2518,7 @@
     // if the player re-rolls.
     const bonus = player.boost ? POWERS.boost.steps : 0;
     player.boost = false;
-    logMessage(`🎲 ${player.name}: ${roll}${loaded ? ' (loaded)' : ''}${bonus ? ` +${bonus}` : ''}`);
+    logMessage(`🎲 ${player.name}: ${roll}${loaded ? t('log.loaded') : ''}${bonus ? ` +${bonus}` : ''}`);
     let target = player.pos + roll + bonus;
 
     // No re-roll offer on a loaded die: that roll was chosen, not dealt.
@@ -2212,7 +2528,7 @@
       renderAll();
       if (await offerReroll(player, roll, bonus, trouble)) {
         player.love -= POWERS.reroll.cost;
-        logMessage(`🎲 ${player.name} re-rolled (−${POWERS.reroll.cost})`);
+        logMessage(t('log.rerolled', { name: player.name, cost: POWERS.reroll.cost }));
         animating = true;
         renderAll();
         roll = 1 + Math.floor(Math.random() * 6);
@@ -2226,7 +2542,7 @@
     }
 
     if (target > 100) {
-      logMessage(`🎯 ${player.name} needs exactly ${100 - player.pos}`);
+      logMessage(t('log.needs', { name: player.name, n: 100 - player.pos }));
       animating = false;
       turnBusy = false;
       saveState();
@@ -2273,7 +2589,7 @@
     let guard = 0;
     while (state.players[state.current].skipNext && guard < playerCount()) {
       state.players[state.current].skipNext = false;
-      logMessage(`⏭️ ${state.players[state.current].name} skipped`);
+      logMessage(t('log.skipped', { name: state.players[state.current].name }));
       state.current = (state.current + 1) % playerCount();
       guard++;
     }
@@ -2312,8 +2628,8 @@
     badge.classList.toggle('ai', isAi);
   }
 
-  function applyQuestion(text, themeKey, isAi) {
-    currentQuestion = { text, theme: themeKey, ai: isAi };
+  function applyQuestion(text, themeKey, isAi, index) {
+    currentQuestion = { text, theme: themeKey, ai: isAi, index };
     setQuestionBadge(themeKey, isAi);
 
     const el = $('question-text');
@@ -2327,7 +2643,7 @@
   function showQuestionLoading(themeKey) {
     setQuestionBadge(themeKey, true);
     const el = $('question-text');
-    el.textContent = 'Writing a question…';
+    el.textContent = t('writingQuestion');
     el.classList.add('loading');
   }
 
@@ -2368,11 +2684,13 @@
           }
           throw new Error('empty reply');
         } catch (error) {
-          logMessage(`✨ AI unavailable, used a saved question instead (${error.message})`);
+          logMessage(t('log.aiFail', { error: error.message }));
         }
       }
 
-      applyQuestion(pickUnused(questionPool(themeKey), state.usedQuestions[themeKey]), themeKey, false);
+      const used = state.usedQuestions[themeKey];
+      const text = pickUnused(questionPool(themeKey), used);
+      applyQuestion(text, themeKey, false, used[used.length - 1]);
       saveState();
     } finally {
       questionLoadInFlight = false;
@@ -2400,7 +2718,7 @@
       player.love += 2;
       logMessage(`💗 ${player.name} +2`);
     } else {
-      logMessage(`⏭️ ${player.name} skipped`);
+      logMessage(t('log.skipped', { name: player.name }));
     }
 
     $('question-modal').classList.add('hidden');
@@ -2476,17 +2794,17 @@
         state.players.forEach((player) => {
           player.love += surprise.value;
         });
-        logMessage(`🤝 everyone +${surprise.value}`);
+        logMessage(t('log.everyone', { n: surprise.value }));
         break;
       }
       case 'skipTurn': {
         const target = surprise.target === 'opponent' ? opp : me;
         target.skipNext = true;
-        logMessage(`⏸️ ${target.name} skips next`);
+        logMessage(t('log.skipsNext', { name: target.name }));
         break;
       }
       case 'extraTurn': {
-        logMessage(`🔁 ${me.name} rolls again`);
+        logMessage(t('log.rollsAgain', { name: me.name }));
         return true;
       }
       case 'lovePoints': {
@@ -2569,7 +2887,7 @@
 
   function showWinModal(winnerIndex) {
     const winner = state.players[winnerIndex];
-    $('win-text').textContent = `${winner.emoji} ${winner.name} wins`;
+    $('win-text').textContent = t('wins', { emoji: winner.emoji, name: winner.name });
 
     // A ranked list rather than one run-on line — with more than two players
     // the joined string was unreadable, and the winner didn't stand out in it.
@@ -2643,6 +2961,28 @@
 
   // ---------- LLM connection ----------
   const LLM_PROVIDERS = {
+    // One key, many models (Claude, GPT, Gemini…). Listed first because it's
+    // the easiest single key to get, and it's the default for a fresh setup.
+    openrouter: {
+      label: 'OpenRouter',
+      defaultModel: 'anthropic/claude-sonnet-5',
+      url: () => 'https://openrouter.ai/api/v1/chat/completions',
+      headers: (key) => ({
+        'content-type': 'application/json',
+        authorization: `Bearer ${key}`,
+        // Shows up as the app name on the key owner's OpenRouter activity page.
+        'x-title': 'Snakes & Ladders',
+      }),
+      body: (model, prompt) => ({
+        model,
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      extract: (data) => {
+        if (data.error) throw new Error(data.error.message || 'OpenRouter error');
+        return data.choices[0].message.content;
+      },
+    },
     claude: {
       label: 'Claude',
       defaultModel: 'claude-opus-5',
@@ -2753,6 +3093,19 @@
 
   const writtenAnswers = () => state.answers.filter((entry) => entry.answer);
 
+  // How every generated line should sound, per interface language. The rest
+  // of the prompt stays in English (models follow English instructions most
+  // reliably); this line decides the language and register of the output.
+  const AI_VOICE = {
+    en:
+      'Write it in casual, natural English — the way a friend would ask it over coffee. ' +
+      'Contractions are good. No therapist-speak, no survey phrasing, nothing stiff.',
+    id:
+      'Write it in casual, everyday spoken Indonesian (bahasa sehari-hari), the way friends chat — ' +
+      'use "kamu", never "Anda"; relaxed words like "nggak", "banget", "bareng" are welcome. ' +
+      'No formal or textbook phrasing, and do not include an English translation.',
+  };
+
   // Whole-word, case-insensitive: does this text name this player? Used by
   // personalization to decide whether a fresh question should stay scoped to
   // whoever answered, or cross over to whoever they actually brought up.
@@ -2806,7 +3159,8 @@
       mode.subject,
       // Empty in Couples mode, so .filter(Boolean) drops the line entirely.
       mode.guard,
-      `Write ONE new line for this game's "${themeLabel(themeKey)}" theme, for ${forName} to answer. Address ${forName} as "you".`,
+      `Write ONE new line for this game's "${themeLabelEn(themeKey)}" theme, for ${forName} to answer. Address ${forName} as "you".`,
+      AI_VOICE[lang] || AI_VOICE.en,
       // The naming rule only matters once there's someone else in the prompt
       // to get confused with — a fresh, standalone question never mentions
       // anyone, so there's nothing for "I"/"you" to misattribute.
@@ -2861,16 +3215,17 @@
 
     const status = $('ai-test-status');
     if (!aiConfig.key) {
-      status.textContent = 'Add a key to enable AI questions.';
+      status.textContent = t('aiNeedKey');
       status.classList.add('error');
       return;
     }
 
     status.classList.remove('error');
-    status.textContent = 'Testing…';
+    status.textContent = t('aiTesting');
     try {
       const raw = await callLLM(
-        'Write one short question two people could ask each other to get to know each other better. Output only the question.'
+        'Write one short question two people could ask each other to get to know each other better. ' +
+          `${AI_VOICE[lang] || AI_VOICE.en} Output only the question.`
       );
       status.textContent = `✅ ${raw.trim().slice(0, 90)}`;
     } catch (error) {
@@ -2908,11 +3263,6 @@
   // exposes no install API whatsoever, so the only honest thing to offer
   // there is instructions.
   let installPrompt = null;
-
-  const INSTALL_LEAD_IOS =
-    "Safari doesn't offer an install button, so iOS needs two taps. Once added, the game opens in its own window and works offline.";
-  const INSTALL_LEAD_OTHER =
-    'Open your browser’s menu (in Chrome, the ⋮ at the top right) and choose Install app or Add to Home screen. Once added, the game opens in its own window and works offline.';
 
   function isIos() {
     // iPadOS 13+ reports itself as a Mac, so the touch check is what
@@ -2984,14 +3334,12 @@
       // Name the actual device — an iPad user told to look on their "iPhone"
       // reasonably wonders whether these are the right instructions at all.
       const ipad = isIos() && !/iphone|ipod/i.test(navigator.userAgent);
-      $('install-title').textContent = ipad ? 'Install on your iPad' : isIos() ? 'Install on your iPhone' : 'Install this app';
+      $('install-title').textContent = t(ipad ? 'installIpad' : isIos() ? 'installIphone' : 'installThis');
       // The steps in the markup are iOS's. Anywhere else the way in is the
       // browser's own menu.
-      $('install-lead').textContent = isIos() ? INSTALL_LEAD_IOS : INSTALL_LEAD_OTHER;
+      $('install-lead').textContent = t(isIos() ? 'installLeadIos' : 'installLeadOther');
       $('install-steps').classList.toggle('hidden', !isIos());
-      $('install-note').textContent = isIos()
-        ? ''
-        : "If you don't see an install option, this browser may not support installing web apps — Chrome, Edge or Safari can.";
+      $('install-note').textContent = isIos() ? '' : t('installNote');
       $('install-modal').classList.remove('hidden');
     });
 
@@ -3006,11 +3354,17 @@
     registerServiceWorker();
     initInstall();
     aiConfig = loadAiConfig();
+    // A saved key from before OpenRouter existed may name a provider that's
+    // since been renamed; fall back rather than crash on a missing entry.
+    if (!LLM_PROVIDERS[aiConfig.provider]) aiConfig.provider = 'openrouter';
+    loadLanguage();
     loadMode();
     initRoster();
     renderModeChoice();
     initThemeChips();
+    applyLanguage();
     buildDice();
+    $('lang-btn').addEventListener('click', () => setLanguage(nextLanguage()));
 
     try {
       setSound(localStorage.getItem(SOUND_KEY) !== 'off');
@@ -3027,18 +3381,12 @@
     $('roll-btn').addEventListener('click', rollDice);
 
     $('reroll-yes-btn').querySelector('.power-cost-num').textContent = POWERS.reroll.cost;
-    $('powers-reroll-cost').textContent = `${POWERS.reroll.cost} hearts`;
     $('powers-btn').addEventListener('click', openPowers);
     $('powers-done-btn').addEventListener('click', closePowers);
     $('reroll-yes-btn').addEventListener('click', () => closeReroll(true));
     $('reroll-no-btn').addEventListener('click', () => closeReroll(false));
     $('new-game-btn').addEventListener('click', () =>
-      askConfirm(
-        'Start a new game?',
-        "This board, the scores and everything you've answered will be cleared.",
-        'Start over',
-        newPlayers
-      )
+      askConfirm(t('confirmTitle'), t('confirmBody'), t('startOver'), newPlayers)
     );
     $('confirm-yes-btn').addEventListener('click', () => {
       const action = confirmAction;
@@ -3101,7 +3449,7 @@
       aiConfig = { provider: aiConfig.provider, key: '', model: '' };
       saveAiConfig();
       renderAiModal();
-      $('ai-test-status').textContent = 'Cleared.';
+      $('ai-test-status').textContent = t('aiCleared');
     });
 
     const restored = loadState();
