@@ -131,13 +131,18 @@ Add a scene by copying an entry and changing the colours.
   `applyBackdrop()` decodes the image off-screen and only then sets
   `data-backdrop="on"` on `<html>`, which fades it in with a slow push-in and
   hides the tiled photo. A missing file just leaves the tiled texture, so a
-  scene without one looks exactly as before. They are **not** precached (a few
-  MB); the network-first worker caches whichever ones get played.
+  scene without one looks exactly as before. They are **not** precached
+  (~1.5 MB for all twelve); the network-first worker caches whichever ones get
+  played. All six scenes have them, in `assets/scenes/`.
   `scripts/generate-art.mjs` makes them through OpenRouter (default model
-  `google/gemini-3-pro-image`); see its header. **If you add backdrops,
-  re-run the glass contrast check against them** — the numbers below were
-  measured over the tiled textures, and `.scene-backdrop::after` (a 30% veil of
-  the scene's base colour) is the knob to turn if a photo is too busy.
+  `google/gemini-3-pro-image`); see its header. Gemini returns ~1376×768 /
+  768×1376, below the script's 1920 cap, and the script never upscales. The
+  meadow portrait is from `openai/gpt-5.4-image-2`: Gemini twice drew a
+  flower wreath round a flat green panel, which reads as a border, not a
+  meadow. Reject anything with text, people, a border or a busy centre.
+  **If you add or replace backdrops, re-run the glass contrast check against
+  them** (see "Interface conventions"). The knob is the veil in
+  `.scene-backdrop::after`: the `--backdrop-veil-*` tokens.
 
 On the board, snakes idle: the head sways from the neck (`.snake-head`), the
 tongue flicks (`.snake-tongue`) and a glint runs down the back
@@ -197,6 +202,28 @@ stamp at the top of `style.css` records the choices.
   - modals: 70% tint over a 28% veil, muted text 4.69:1
   - control borders: 55% ink for 3:1
   If you change a tint, an opacity or a texture, re-run that check.
+- **Photographic backdrops need a shaped veil.** The photos keep their detail
+  at the edges, which is exactly where the score cards and dock float. So a
+  flat veil didn't work: at the original 30% the forest dock fell to 2.8:1
+  and the romance one to 2.7:1 (a dark chair leg under the portrait). Even
+  55% still left 3.7:1. The veil is now a vertical gradient of the scene's base
+  colour: `--backdrop-veil-edge` (85%) over the top `--backdrop-veil-top`
+  (110px) and bottom `--backdrop-veil-bottom` (170px), easing over
+  `--backdrop-veil-ramp` (90px) to `--backdrop-veil-mid` (30%) through the
+  middle, where only the board sits. The bands are in pixels, not percent,
+  because on a 428px-tall landscape phone the dock starts at 68% height.
+  The setup screen has no board, and its card spans the middle, so there the
+  mid stop becomes `--backdrop-veil-setup` (85%), via
+  `:has(#setup-screen:not(.hidden))`. The check was measured in Chromium on
+  screenshots: hide the panel's contents, take the darkest 2% of pixels
+  behind the glass (brightest 2% on dark glass) and compare with
+  `--color-muted`. On the tiled textures, this method gives 4.64–5.74. With
+  the backdrops the worst muted-text cases are:
+  - score cards and dock, at 1280×800, 390×844 and 926×428: 4.69:1 (night
+    score cards, under the moon glow); every light scene ≥ 5.07
+  - setup card, 1280×800 and 390×844: 4.81:1 (night, phone)
+  Visible dock and score text is ink, not muted, so it clears these by a wide
+  margin; muted text appears there only in the power status line.
 - **Night gets dark glass.** Its backdrop is nearly black, and white frost over
   it turned muted text into 2.8:1 grey. `BOARD_THEMES.night.glass = 'dark'`
   sets `data-glass="dark"` on `<html>`, which swaps the tokens: dark tint,

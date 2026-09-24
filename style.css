@@ -62,6 +62,17 @@
   --glass-fill-active: color-mix(in oklch, var(--glass-base) 16%, transparent);
   --glass-rim: color-mix(in oklch, var(--glass-base) 75%, transparent);
   --glass-highlight: color-mix(in oklch, var(--glass-base) 95%, transparent);
+  /* The veil over a photographic backdrop, as a share of the scene's base
+     colour: heavy across the top and bottom bands where the score cards and
+     dock float, light through the middle where only the board sits. */
+  --backdrop-veil-edge: 85%;
+  --backdrop-veil-mid: 30%;
+  /* Measured from each edge in pixels, not percentages, because the panels
+     are fixed sizes: on a 428px-tall landscape phone the dock starts at 68%. */
+  --backdrop-veil-top: 110px;
+  --backdrop-veil-bottom: 170px;
+  --backdrop-veil-ramp: 90px;
+  --backdrop-veil-setup: 85%;
   /* A light blur on purpose, so the scene's texture still reads through the
      frost. Measured: blur radius barely moves the worst case on these tiles
      (4.54:1 at 12px vs 4.59:1 at 24px), so the extra clarity costs nothing. */
@@ -1182,7 +1193,8 @@ button {
 /* Full-bleed photographic scene, when the theme has one (see applyBackdrop).
    A slow push-in keeps it from reading as a still wallpaper, and a veil of
    the scene's base colour keeps the glass over it as legible as it is over
-   the tiled texture. */
+   the tiled texture. The veil is heavy behind the top and bottom panels and
+   light around the board (the --backdrop-veil-* tokens; see AGENTS.md). */
 .scene-backdrop {
   position: fixed;
   inset: 0;
@@ -1199,8 +1211,23 @@ button {
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--page-base);
-  opacity: 0.3;
+  --veil-edge: color-mix(in srgb, var(--page-base) var(--backdrop-veil-edge), transparent);
+  --veil-mid: color-mix(in srgb, var(--page-base) var(--backdrop-veil-mid), transparent);
+  background: linear-gradient(
+    to bottom,
+    var(--veil-edge) 0,
+    var(--veil-edge) var(--backdrop-veil-top),
+    var(--veil-mid) calc(var(--backdrop-veil-top) + var(--backdrop-veil-ramp)),
+    var(--veil-mid) calc(100% - var(--backdrop-veil-bottom) - var(--backdrop-veil-ramp)),
+    var(--veil-edge) calc(100% - var(--backdrop-veil-bottom)),
+    var(--veil-edge) 100%
+  );
+}
+
+/* The setup card spans the middle band, and there's no board to show the
+   photo off around, so the setup screen takes the heavy veil throughout. */
+:root:has(#setup-screen:not(.hidden)) .scene-backdrop::after {
+  --backdrop-veil-mid: var(--backdrop-veil-setup);
 }
 
 :root[data-backdrop='on'] .scene-backdrop {
