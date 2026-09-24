@@ -27,6 +27,11 @@
   "assets": {
     "directory": "./dist",
 
+    // Cloudflare's default, spelled out because the Indonesian landing page
+    // depends on it: dist/id.html is served at /id (and /id.html redirects
+    // there), the address its canonical, hreflang and sitemap entries use.
+    "html_handling": "auto-trailing-slash",
+
     // No "binding" here — that's only valid when a Worker script (a "main")
     // actually reads it via env.ASSETS.fetch(). This is a pure assets-only
     // Worker with no script at all, and wrangler dev refuses to start

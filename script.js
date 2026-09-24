@@ -226,8 +226,10 @@
   }
 
   // ---------- Language picker ----------
-  // First visit follows the browser (Indonesian if it asks for id/in, else
-  // English); after that the player's own choice sticks.
+  // The player's own choice sticks. Before there is one, the Indonesian
+  // landing page (/id, served as lang="id" — see scripts/build.js) opens in
+  // Indonesian, and / follows the browser: Indonesian if it asks for id/in,
+  // else English.
   function loadLanguage() {
     let saved = null;
     try {
@@ -236,6 +238,7 @@
       /* storage unavailable */
     }
     if (saved && I18N[saved]) lang = saved;
+    else if (document.documentElement.lang === 'id') lang = 'id';
     else lang = /^(id|in)\b/i.test(navigator.language || '') ? 'id' : 'en';
   }
 

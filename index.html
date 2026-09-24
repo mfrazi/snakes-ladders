@@ -60,6 +60,16 @@
   content="Play Snakes &amp; Ladders with a twist: every square starts a real conversation. 600+ questions and dares for couples or friends. Free, no sign-up, works offline."
 />
 <link rel="canonical" href="https://snakes-ladders.mfrazi.me/" />
+<!--
+  The same game in Indonesian lives at /id: scripts/build.js writes it from
+  this file, in Indonesian, as dist/id.html. One page can't rank in two
+  languages, so each gets its own URL, and hreflang tells search engines the
+  two are translations of each other. Both pages carry this same set, each
+  naming itself too, which is what Google requires.
+-->
+<link rel="alternate" hreflang="en" href="https://snakes-ladders.mfrazi.me/" />
+<link rel="alternate" hreflang="id" href="https://snakes-ladders.mfrazi.me/id" />
+<link rel="alternate" hreflang="x-default" href="https://snakes-ladders.mfrazi.me/" />
 <meta name="robots" content="index, follow, max-image-preview:large" />
 
 <!-- Open Graph (Facebook, WhatsApp, LinkedIn, iMessage) -->
@@ -80,6 +90,7 @@
   content="A pink Snakes and Ladders board with a gold heart-runged ladder, a friendly snake, two game pawns, and small hearts floating above it."
 />
 <meta property="og:locale" content="en_US" />
+<meta property="og:locale:alternate" content="id_ID" />
 
 <!-- Twitter/X -->
 <meta name="twitter:card" content="summary_large_image" />

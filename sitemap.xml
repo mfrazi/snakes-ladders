@@ -1,18 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  A single-page game, so this has exactly one entry. It exists because the
-  Sitemap line in robots.txt points at it, and a 404 there is a crawl error
-  rather than a neutral absence.
+  One game, two languages: / in English and /id in Indonesian (dist/id.html,
+  written by scripts/build.js). Each entry lists both, plus x-default, as
+  hreflang alternates — the same set index.html carries in its <head>.
 
   The origin is hardcoded to the real, live domain — matching robots.txt and
   the canonical tag in index.html. If the site ever moves domains, update all
   three together.
 -->
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://snakes-ladders.mfrazi.me/</loc>
-    <lastmod>2026-09-14</lastmod>
+    <lastmod>2026-09-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://snakes-ladders.mfrazi.me/" />
+    <xhtml:link rel="alternate" hreflang="id" href="https://snakes-ladders.mfrazi.me/id" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://snakes-ladders.mfrazi.me/" />
+  </url>
+  <url>
+    <loc>https://snakes-ladders.mfrazi.me/id</loc>
+    <lastmod>2026-09-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://snakes-ladders.mfrazi.me/" />
+    <xhtml:link rel="alternate" hreflang="id" href="https://snakes-ladders.mfrazi.me/id" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://snakes-ladders.mfrazi.me/" />
   </url>
 </urlset>
