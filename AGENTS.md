@@ -226,15 +226,13 @@ and a rim light.
 
 The board itself moves too, quietly: a slow sheen sweeps across it
 (`.board-sheen`), glints wink on random squares (`startBoardMotion`), the
-finish square glows, the current player's square breathes (`.cell-active`;
-a ring drawn once on `::before`, only its opacity animating),
+finish square glows, the current player's square breathes (`.cell-active`),
 a walking pawn leaves a fading trail (`.stepped`), a landing sends a ripple
 over two rings of squares (`.rippled`), and a light runs up each ladder
 (`.ladder-sheen`). The ripple's delay and strength follow each square's true
 distance from the landing (`--ripple-delay`, `--ripple-amp`), on one
-sine-shaped swell, so the front is round and smooth. It scales and tints the
-squares but never lifts them with `translateZ`: in the tilted board's 3D
-context a lifted square draws over the snakes and ladders. Everything here stops under `prefers-reduced-motion` (the
+sine-shaped swell, so the front is round and smooth. It only tints the
+squares, with no transform (see "Performance on phones"). Everything here stops under `prefers-reduced-motion` (the
 tongue then rests out).
 
 **The die** is thrown rather than spun: `diceToss` (style.css) arcs it up and
@@ -380,10 +378,20 @@ seconds of the game screen, switching one feature off at a time. Headless
 frame rates are too noisy to judge by, because it rasterises in software. The rules this
 produced:
 
-- **Endless animations are transform or opacity only.** A looping
-  `box-shadow` (the active square, the Roll button's ring) repaints every
-  frame; draw the shadow once on a pseudo-element and animate its opacity or
-  scale instead. One-shot effects (ripple, step trail) can afford paint.
+- **The board is flat: no `transform-style: preserve-3d` on `.board`.** It
+  tilts with `rotateX` as one plane. With preserve-3d, every square and every
+  square's number became its own compositor layer (285 layers on the game
+  screen, 58 without), and each effect starting or stopping reshuffled them.
+  On phones that flickered the whole board on every roll. Count layers with
+  CDP `LayerTree.enable` if you touch the board.
+- **Inside the board, prefer a small repaint to a layer that comes and
+  goes.** A transform or opacity animation promotes its element to a layer,
+  so the active square breathes with `box-shadow` and the ripple is a tint,
+  not a scale. Layers that live as long as the board are fine (the sheen,
+  the glints, which keep `will-change`).
+- **Elsewhere, endless animations are transform or opacity only.** The Roll
+  button's ring is drawn once on `::after` and scaled and faded, because a
+  looping `box-shadow` repaints every frame.
 - **Nothing loops inside `#board-lines`** (see "Board scenes").
 - **Touch screens drop what they can't show:** ornaments hold still, stirs
   rest longer, and wildlife is already 40% fewer under 640px.

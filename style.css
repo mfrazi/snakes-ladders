@@ -1080,7 +1080,11 @@ button {
   border: 6px solid var(--board-frame);
   border-radius: 0;
   transform: rotateX(var(--tilt));
-  transform-style: preserve-3d;
+  /* Flat, deliberately: no transform-style: preserve-3d. Nothing on the board
+     moves in depth, and preserve-3d made every square and every square's
+     number its own compositor layer, ~200 of them. A phone swapping that
+     many layers in and out as effects start and stop flickered the whole
+     board on every roll. Flattened, the board is one tilted plane. */
   /* Depth comes from --board-edge (per scene); the inset hairline is a printed
      keyline just inside the frame. */
   box-shadow: var(--board-edge), inset 0 0 0 1px color-mix(in oklch, var(--color-veil) 18%, transparent);
@@ -1251,8 +1255,10 @@ button {
 /* A landing ripples out over two rings of squares (see flashCell): each
    rises and settles on one sine-shaped swell, later and softer the further
    it is, so the wave reads as one continuous ring rather than a flicker.
-   No translateZ: in the tilted board's 3D context a lifted square is drawn
-   over the snakes and ladders, which blink out as the wave passes. */
+   Tint only, no transform: a transform promotes each square to its own
+   layer inside the tilted 3D board, and twenty layers appearing at once
+   made the board flicker on phones (a lift also drew squares over the
+   snakes and ladders). */
 .cell.rippled {
   animation: rippleTile 0.9s var(--ripple-delay, 0ms) both cubic-bezier(0.37, 0, 0.63, 1);
 }
@@ -1260,11 +1266,9 @@ button {
 @keyframes rippleTile {
   0%,
   100% {
-    transform: none;
     box-shadow: inset 0 0 0 40px color-mix(in oklch, var(--color-accent-bright) 0%, transparent);
   }
   45% {
-    transform: scale(calc(1 + 0.025 * var(--ripple-amp, 1)));
     box-shadow: inset 0 0 0 40px color-mix(in oklch, var(--color-accent-bright) calc(16% * var(--ripple-amp, 1)), transparent);
   }
 }
@@ -1280,27 +1284,25 @@ button {
   }
 }
 
-/* The square under whoever's turn it is, breathing in their colour. The
-   ring is drawn once on a pseudo-element and only its opacity breathes:
-   animating the box-shadow itself repainted the square on every frame. */
-.cell.cell-active:not(.cell-finish)::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  box-shadow:
-    inset 0 0 0 2px color-mix(in oklch, var(--player-color, var(--color-accent)) 70%, transparent),
-    inset 0 0 14px color-mix(in oklch, var(--player-color, var(--color-accent)) 30%, transparent);
-  pointer-events: none;
+/* The square under whoever's turn it is, breathing in their colour. This
+   one stays a box-shadow on the cell, a small repaint, on purpose: an
+   opacity animation would promote it to its own compositor layer, and a
+   layer that appears and vanishes inside the tilted 3D board (the class
+   comes off the moment the dice are thrown) makes the browser rebuild the
+   board's layers, which flickers the whole board on phones. */
+.cell.cell-active {
   animation: activeSquare 2.4s ease-in-out infinite;
 }
 
 @keyframes activeSquare {
   0%,
   100% {
-    opacity: 0.4;
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--player-color, var(--color-accent)) 35%, transparent);
   }
   50% {
-    opacity: 1;
+    box-shadow:
+      inset 0 0 0 2px color-mix(in oklch, var(--player-color, var(--color-accent)) 70%, transparent),
+      inset 0 0 14px color-mix(in oklch, var(--player-color, var(--color-accent)) 30%, transparent);
   }
 }
 
@@ -3146,7 +3148,7 @@ button {
   .board-sheen,
   .cell.rippled,
   .cell.stepped,
-  .cell.cell-active::before,
+  .cell.cell-active,
   .cell.cell-finish::before,
   .dice-overlay.settled .dice-lift,
   .dice-overlay.settled .dice-glow,
