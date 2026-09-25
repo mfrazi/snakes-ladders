@@ -384,6 +384,17 @@ produced:
   screen, 58 without), and each effect starting or stopping reshuffled them.
   On phones that flickered the whole board on every roll. Count layers with
   CDP `LayerTree.enable` if you touch the board.
+- **Anything on the board that ever animates a transform keeps a standing
+  layer** (`will-change: transform`): `#board-lines`, the snake heads and
+  tongues, the pawns. Without it the browser promoted `#board-lines` when a
+  snake began to stir and flattened it back when the stir ended, redrawing
+  the whole board each time: a flicker every few seconds, at random. Watch
+  for it by logging which layers appear and vanish (`LayerTree` events,
+  owners from `DOM.describeNode`); at rest the list should not change at all.
+- **No backdrop blur over the board on touch screens where it can be
+  avoided.** The dice veil drops its blur under `(pointer: coarse)` for a
+  deeper tint (`--dice-tint-solid`): a backdrop-filter fading in over the
+  tilted board is a known flicker on Android Chrome, and every roll opens it.
 - **Inside the board, prefer a small repaint to a layer that comes and
   goes.** A transform or opacity animation promotes its element to a layer,
   so the active square breathes with `box-shadow` and the ripple is a tint,

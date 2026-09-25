@@ -99,6 +99,8 @@
   --color-shadow-die: oklch(15% 0.01 55 / 0.45);
   --overlay-tint: color-mix(in oklch, var(--color-veil) 28%, transparent);
   --dice-tint: color-mix(in oklch, var(--color-veil) 58%, transparent);
+  /* Touch screens: the same veil, deeper, standing in for the blur. */
+  --dice-tint-solid: color-mix(in oklch, var(--color-veil) 68%, transparent);
 
   --font-display: 'Fraunces', ui-serif, Georgia, serif;
   --font-body: 'Geist', ui-sans-serif, system-ui, sans-serif;
@@ -1770,6 +1772,11 @@ button {
   pointer-events: none;
   /* Lit from the top left, so the cast shadow falls down and to the right. */
   filter: drop-shadow(0.12em 0.22em 0.16em var(--color-shadow-line));
+  /* Its own layer for as long as the board exists. Otherwise the browser
+     promotes it when a snake starts to stir and flattens it back into the
+     board when the stir ends, and each switch redraws the whole board:
+     that was the flicker phones showed every few seconds. */
+  will-change: transform;
 }
 
 /* Snakes and ladders stir one at a time, now and then (see stirBoard in
@@ -1780,8 +1787,11 @@ button {
    On a stir the head sways a few degrees from the neck, the tongue flicks,
    and a glint runs down the back. Pivots are set per snake in script.js in
    board units, hence transform-box: view-box. */
+/* The stirring parts keep standing layers too, for the same reason as the
+   SVG itself: promoted and dropped around every stir, they redrew it. */
 #board-lines .snake-head {
   transform-box: view-box;
+  will-change: transform;
 }
 
 #board-lines .stir .snake-head {
@@ -1803,6 +1813,7 @@ button {
 
 #board-lines .snake-tongue {
   transform-box: view-box;
+  will-change: transform;
   transform: rotate(var(--heading)) scaleX(0) rotate(calc(-1 * var(--heading)));
 }
 
@@ -1871,6 +1882,9 @@ button {
   transform: rotateX(calc(-1 * var(--tilt)));
   transform-origin: bottom center;
   filter: drop-shadow(0 3px 3px var(--color-shadow-piece));
+  /* Same reason as #board-lines: a pawn hops, bobs and travels, and without
+     a standing layer it was promoted and dropped on every step. */
+  will-change: transform;
 }
 
 .token .pawn {
@@ -2320,6 +2334,17 @@ button {
 @keyframes fadeIn {
   from {
     opacity: 0;
+  }
+}
+
+/* On touch screens the veil behind the die doesn't blur. A backdrop-filter
+   fading in over the tilted board is a known flicker on Android Chrome, and
+   every roll opens this overlay; a deeper tint does the same job. */
+@media (pointer: coarse) {
+  .dice-overlay {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--dice-tint-solid);
   }
 }
 
