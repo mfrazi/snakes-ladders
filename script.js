@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-25d';
+  const BUILD = '2026-09-25e';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -2049,11 +2049,15 @@
     document.documentElement.style.setProperty('--die-tex', url(theme.cellTexture));
     document.documentElement.style.setProperty('--die-tex-size', theme.cellTextureSize);
 
+    // On touch screens the board's surface holds still, so it paints into
+    // the board instead of being two more full-density layers (see the
+    // touch-screen block at the end of style.css).
+    const boardDrifts = !window.matchMedia('(pointer: coarse)').matches;
     const board = document.querySelector('.board-texture');
     if (board) {
       board.style.setProperty('--cell-texture', url(theme.cellTexture));
       board.style.setProperty('--cell-tex-size', theme.cellTextureSize);
-      run(board, oneTile(theme.cellTextureSize), theme.boardDriftDuration);
+      if (boardDrifts) run(board, oneTile(theme.cellTextureSize), theme.boardDriftDuration);
     }
 
     const boardPhoto = document.querySelector('.board-photo');
@@ -2061,11 +2065,13 @@
       boardPhoto.style.setProperty('--board-photo', `url("${theme.photo}")`);
       boardPhoto.style.setProperty('--board-photo-size', theme.photoBoardSize);
       boardPhoto.style.setProperty('--board-photo-opacity', theme.photoBoardOpacity);
-      run(
-        boardPhoto,
-        oneTile(`${theme.photoBoardSize} ${theme.photoBoardSize}`),
-        theme.boardDriftDuration
-      );
+      if (boardDrifts) {
+        run(
+          boardPhoto,
+          oneTile(`${theme.photoBoardSize} ${theme.photoBoardSize}`),
+          theme.boardDriftDuration
+        );
+      }
     }
 
     console.info(
@@ -3069,8 +3075,11 @@
       token.style.setProperty('--token-bottom', `${4 + row * 34}%`);
       token.classList.toggle('active-turn', state.current === i && !state.finished && !animating);
 
+      // A pawn mid-walk or mid-trip lives on the board, not in a square;
+      // the move puts it back in its square when it arrives.
+      const moving = token.classList.contains('walking') || token.classList.contains('travelling');
       const cell = cellEls[player.pos];
-      if (cell && token.parentElement !== cell) cell.appendChild(token);
+      if (cell && !moving && token.parentElement !== cell) cell.appendChild(token);
     });
 
     // The square under whoever's turn it is breathes in their colour.
@@ -3085,12 +3094,25 @@
     }
   }
 
+  // The pawn walks across the board itself, gliding from square to square,
+  // and only settles into the last square's element when it arrives. Moving
+  // it into a new square's element on every step rebuilt its compositor
+  // layer each time, which phones showed as a flicker on every hop.
   async function walkToken(playerIndex, from, to) {
     if (from === to) return;
     const step = to > from ? 1 : -1;
+    const token = tokenEl(playerIndex);
+    const place = (num) => {
+      const c = cellCenter(num);
+      token.style.left = `${c.x}%`;
+      token.style.top = `${c.y}%`;
+    };
+    place(from);
+    token.classList.add('walking');
+    $('board').appendChild(token);
+    void token.offsetWidth;
     for (let pos = from + step, n = 0; ; pos += step, n++) {
-      const token = tokenEl(playerIndex);
-      cellEls[pos].appendChild(token);
+      place(pos);
       token.classList.remove('hopping');
       void token.offsetWidth;
       token.classList.add('hopping');
@@ -3100,6 +3122,10 @@
       await sleep(STEP_MS);
       if (pos === to) break;
     }
+    token.classList.remove('walking');
+    token.style.left = '';
+    token.style.top = '';
+    cellEls[to].appendChild(token);
   }
 
   async function travelToken(playerIndex, from, to) {

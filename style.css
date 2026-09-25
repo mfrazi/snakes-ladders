@@ -1466,7 +1466,7 @@ button {
 
 /* With a real scene behind, the tiled photo would only muddy it. */
 :root[data-backdrop='on'] .scene-photo {
-  opacity: 0;
+  display: none;
 }
 
 :root[data-backdrop='on'] .scene-texture {
@@ -1635,11 +1635,15 @@ button {
 
 /* Caustics: bright veins of light where noise crosses its midline. Each
    layer slides by exactly one of its own tiles per loop, so it's seamless. */
+/* Each layer overhangs the screen by exactly one tile, and only on the side
+   it slides in from (A moves down-right by 400px, B down-left by 560px), so
+   the texture never runs out. The old symmetric overhang made each layer
+   ~27 megapixels at 3x on a phone, most of it never on screen. */
 .scene-events > .ev-caustics {
-  top: -560px;
-  left: -560px;
-  width: calc(100% + 1120px);
-  height: calc(100% + 1120px);
+  top: -400px;
+  left: -400px;
+  width: calc(100% + 400px);
+  height: calc(100% + 400px);
   opacity: 0.75;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='c' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.011' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 .08 .75 .08 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
   background-size: 400px 400px;
@@ -1648,6 +1652,10 @@ button {
 /* A second, larger tile at its own size (560px), so the two patterns drift
    through each other without the 400px repeat ever lining up. */
 .scene-events > .ev-caustics-b {
+  top: -560px;
+  left: 0;
+  width: calc(100% + 560px);
+  height: calc(100% + 560px);
   opacity: 0.55;
   background-size: 560px 560px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='c' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.016' numOctaves='2' seed='31' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 .06 .6 .06 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
@@ -1930,6 +1938,17 @@ button {
   100% {
     transform: rotateX(calc(-1 * var(--tilt))) translateY(0) scaleX(1) scaleY(1);
   }
+}
+
+/* Walking: on the board rather than in a square (see walkToken), gliding to
+   each square's centre as it hops. */
+.token.walking {
+  bottom: auto;
+  z-index: 6;
+  margin-top: calc(var(--token-w) * -0.85);
+  transition:
+    left calc(var(--step-ms) * 0.8) cubic-bezier(0.45, 0, 0.35, 1),
+    top calc(var(--step-ms) * 0.8) cubic-bezier(0.45, 0, 0.35, 1);
 }
 
 .token.travelling {
@@ -3196,5 +3215,67 @@ button {
   .icon-btn:active,
   .color-chip:active {
     transform: none;
+  }
+}
+
+/* ---------- Touch screens: stay inside a phone's graphics memory ----------
+   Every moving layer is a bitmap the GPU keeps at the screen's full density,
+   3x on most phones. The game screen held 45-94 megapixels of them (180-375
+   MB); a phone browser gets a fraction of that, and when it runs out it drops
+   parts of the screen and redraws them — the flicker seen while idle, while a
+   pawn walked and when a card opened. So on touch screens the backdrop photo
+   is the scene on its own (the tiled texture under it stops), the board's
+   surface stops drifting and paints into the board itself (see
+   applyTextures), and the sheen, the sunlight wash and the second caustics
+   layer are left out. The living layers (wildlife, set pieces) stay. */
+@media (pointer: coarse) {
+  :root[data-backdrop='on'] .scene-texture,
+  .scene-light,
+  .board-sheen,
+  .scene-events > .ev-caustics-b {
+    display: none;
+  }
+
+  .board-texture,
+  .board-photo {
+    will-change: auto;
+  }
+
+  /* A stir is only the glint here: a swaying head or flicking tongue gets a
+     small layer of its own inside the board's drawing while it moves, and
+     that coming and going redrew the drawing. The tongue rests out. */
+  #board-lines .snake-head,
+  #board-lines .snake-tongue {
+    will-change: auto;
+  }
+
+  #board-lines .stir .snake-head,
+  #board-lines .stir .snake-tongue {
+    animation: none;
+  }
+
+  #board-lines .snake-tongue {
+    transform: none;
+  }
+
+  /* Question, surprise and other cards open over the tilted board, and a
+     backdrop blur fading in over it is a known Android Chrome flicker (the
+     dice veil drops its blur for the same reason). They get the same
+     near-opaque tint as the reduced-transparency fallback instead. */
+  :root,
+  :root[data-glass='dark'] {
+    --glass-modal: color-mix(in oklch, var(--glass-base) 96%, transparent);
+  }
+
+  .modal-box,
+  .log-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* The landing ring is a scaled, fading layer that appears inside the board
+     for a moment; the ripple around the square already marks the landing. */
+  .cell.landed::after {
+    display: none;
   }
 }

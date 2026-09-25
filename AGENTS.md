@@ -378,6 +378,27 @@ seconds of the game screen, switching one feature off at a time. Headless
 frame rates are too noisy to judge by, because it rasterises in software. The rules this
 produced:
 
+- **Stay inside a phone's graphics memory.** Every composited layer is a
+  bitmap at the screen's full density (3x on most phones). The game screen
+  held 45–94 megapixels of them (180–375 MB), and a phone browser gets far
+  less; when it runs out it drops parts of the screen and redraws them,
+  which is a flicker anywhere — idle, walking, opening a card. Sum
+  `width × height × dpr²` over `LayerTree` layers that draw content; keep
+  the phone game screen near 15 MP (it's 13–22 now, ocean the highest for
+  its caustics). The touch-screen block at the end of `style.css` is where
+  the cuts live: the backdrop photo stands alone (no tiled texture under
+  it), the board's surface doesn't drift (`applyTextures` skips it), and
+  the sheen, sunlight wash and second caustics layer are left out. Hidden
+  layers still cost: the tiled photo under a backdrop is `display: none`,
+  not `opacity: 0`. Caustics overhang by one tile on the side they slide
+  in from, not on every side.
+- **Cards and the dice veil don't blur on touch screens.** A backdrop-filter
+  fading in over the tilted board is a known Android Chrome flicker; they
+  take the reduced-transparency tint instead.
+- **A walking pawn stays one element on the board** (`walkToken`): it glides
+  between square centres and settles into its square at the end. Moving it
+  into each square's element per step rebuilt its layer every hop.
+
 - **The board is flat: no `transform-style: preserve-3d` on `.board`.** It
   tilts with `rotateX` as one plane. With preserve-3d, every square and every
   square's number became its own compositor layer (285 layers on the game
@@ -391,10 +412,6 @@ produced:
   the whole board each time: a flicker every few seconds, at random. Watch
   for it by logging which layers appear and vanish (`LayerTree` events,
   owners from `DOM.describeNode`); at rest the list should not change at all.
-- **No backdrop blur over the board on touch screens where it can be
-  avoided.** The dice veil drops its blur under `(pointer: coarse)` for a
-  deeper tint (`--dice-tint-solid`): a backdrop-filter fading in over the
-  tilted board is a known flicker on Android Chrome, and every roll opens it.
 - **Inside the board, prefer a small repaint to a layer that comes and
   goes.** A transform or opacity animation promotes its element to a layer,
   so the active square breathes with `box-shadow` and the ripple is a tint,
@@ -405,7 +422,9 @@ produced:
   looping `box-shadow` repaints every frame.
 - **Nothing loops inside `#board-lines`** (see "Board scenes").
 - **Touch screens drop what they can't show:** ornaments hold still, stirs
-  rest longer, and wildlife is already 40% fewer under 640px.
+  rest longer and are only the glint (a swaying head got a layer of its own
+  for the moment it moved), the landing ring is left to the ripple, and
+  wildlife is already 40% fewer under 640px.
 
 ## Sound
 
