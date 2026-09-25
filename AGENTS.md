@@ -208,22 +208,31 @@ shift against the pointer by 10, 22 and 36px (`initParallax`), the nearer
 ones more. Set on the layers themselves through the `translate` property, so
 it composes with their own animations and restyles nothing else.
 
-On the board, snakes idle: the head sways from the neck (`.snake-head`), the
+On the board, snakes stir: the head sways from the neck (`.snake-head`), the
 tongue flicks (`.snake-tongue`) and a glint runs down the back
-(`.snake-sheen`). Pivots are set per snake in board units, hence
-`transform-box: view-box`. Ornaments sway on per-cell clocks from the same
-hash that places them. Pawns have a radial gloss and a rim light.
+(`.snake-sheen`); a ladder's rails catch the light (`.ladder-sheen`). Pivots
+are set per snake in board units, hence `transform-box: view-box`.
+**One piece at a time, now and then, never on a loop** (`stirBoard`: every
+2–5s on desktop, 4.5–8.5s on touch screens). `#board-lines` is one detailed
+SVG under a `drop-shadow` filter, and while anything inside it moves, the
+whole board is re-rasterised and re-shadowed every frame. With every snake
+and ladder idling on endless loops that was ~250ms of main-thread work per
+second on a 4×-throttled phone profile, most of each frame's budget; stirring
+one piece at a time brought it to ~80. Don't put an infinite animation
+inside that SVG. Ornaments sway on per-cell clocks from the same hash that
+places them, except on touch screens, where they hold still (a style pass
+per frame for a detail too small to see there). Pawns have a radial gloss
+and a rim light.
 
 The board itself moves too, quietly: a slow sheen sweeps across it
 (`.board-sheen`), glints wink on random squares (`startBoardMotion`), the
-finish square glows, the current player's square is marked (`.cell-active`),
+finish square glows, the current player's square breathes (`.cell-active`),
 a walking pawn leaves a fading trail (`.stepped`), a landing sends a ripple
 over two rings of squares (`.rippled`), and a light runs up each ladder
 (`.ladder-sheen`). The ripple's delay and strength follow each square's true
 distance from the landing (`--ripple-delay`, `--ripple-amp`), on one
-sine-shaped swell, so the front is round and smooth. It scales and tints the
-squares but never lifts them with `translateZ`: in the tilted board's 3D
-context a lifted square draws over the snakes and ladders. Everything here stops under `prefers-reduced-motion` (the
+sine-shaped swell, so the front is round and smooth. It only tints the
+squares, with no transform (see "Performance on phones"). Everything here stops under `prefers-reduced-motion` (the
 tongue then rests out).
 
 **The die** is thrown rather than spun: `diceToss` (style.css) arcs it up and
@@ -359,6 +368,63 @@ Checked at 320, 375, 414 and 768px plus 1280×800 and a 926×428 landscape
 phone: no horizontal scroll, no wrapped labels, and the tilted board stays
 inside the screen. That last one is why the desktop board is `min(88vw, 78vh)`:
 at a 16° tilt the near edge projects ~7% wider than the layout box.
+
+### Performance on phones
+
+Measure on a throttled phone profile (390×844 at 3×, `isMobile`, CDP
+`Emulation.setCPUThrottlingRate` 4) and read main-thread time from CDP
+`Performance.getMetrics` (`TaskDuration`, `RecalcStyleDuration`) over a few
+seconds of the game screen, switching one feature off at a time. Headless
+frame rates are too noisy to judge by, because it rasterises in software. The rules this
+produced:
+
+- **Stay inside a phone's graphics memory.** Every composited layer is a
+  bitmap at the screen's full density (3x on most phones). The game screen
+  held 45–94 megapixels of them (180–375 MB), and a phone browser gets far
+  less; when it runs out it drops parts of the screen and redraws them,
+  which is a flicker anywhere — idle, walking, opening a card. Sum
+  `width × height × dpr²` over `LayerTree` layers that draw content; keep
+  the phone game screen near 15 MP (it's 13–22 now, ocean the highest for
+  its caustics). The touch-screen block at the end of `style.css` is where
+  the cuts live: the backdrop photo stands alone (no tiled texture under
+  it), the board's surface doesn't drift (`applyTextures` skips it), and
+  the sheen, sunlight wash and second caustics layer are left out. Hidden
+  layers still cost: the tiled photo under a backdrop is `display: none`,
+  not `opacity: 0`. Caustics overhang by one tile on the side they slide
+  in from, not on every side.
+- **Cards and the dice veil don't blur on touch screens.** A backdrop-filter
+  fading in over the tilted board is a known Android Chrome flicker; they
+  take the reduced-transparency tint instead.
+- **A walking pawn stays one element on the board** (`walkToken`): it glides
+  between square centres and settles into its square at the end. Moving it
+  into each square's element per step rebuilt its layer every hop.
+
+- **The board is flat: no `transform-style: preserve-3d` on `.board`.** It
+  tilts with `rotateX` as one plane. With preserve-3d, every square and every
+  square's number became its own compositor layer (285 layers on the game
+  screen, 58 without), and each effect starting or stopping reshuffled them.
+  On phones that flickered the whole board on every roll. Count layers with
+  CDP `LayerTree.enable` if you touch the board.
+- **Anything on the board that ever animates a transform keeps a standing
+  layer** (`will-change: transform`): `#board-lines`, the snake heads and
+  tongues, the pawns. Without it the browser promoted `#board-lines` when a
+  snake began to stir and flattened it back when the stir ended, redrawing
+  the whole board each time: a flicker every few seconds, at random. Watch
+  for it by logging which layers appear and vanish (`LayerTree` events,
+  owners from `DOM.describeNode`); at rest the list should not change at all.
+- **Inside the board, prefer a small repaint to a layer that comes and
+  goes.** A transform or opacity animation promotes its element to a layer,
+  so the active square breathes with `box-shadow` and the ripple is a tint,
+  not a scale. Layers that live as long as the board are fine (the sheen,
+  the glints, which keep `will-change`).
+- **Elsewhere, endless animations are transform or opacity only.** The Roll
+  button's ring is drawn once on `::after` and scaled and faded, because a
+  looping `box-shadow` repaints every frame.
+- **Nothing loops inside `#board-lines`** (see "Board scenes").
+- **Touch screens drop what they can't show:** ornaments hold still, stirs
+  rest longer and are only the glint (a swaying head got a layer of its own
+  for the moment it moved), the landing ring is left to the ripple, and
+  wildlife is already 40% fewer under 640px.
 
 ## Sound
 

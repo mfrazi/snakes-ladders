@@ -99,6 +99,8 @@
   --color-shadow-die: oklch(15% 0.01 55 / 0.45);
   --overlay-tint: color-mix(in oklch, var(--color-veil) 28%, transparent);
   --dice-tint: color-mix(in oklch, var(--color-veil) 58%, transparent);
+  /* Touch screens: the same veil, deeper, standing in for the blur. */
+  --dice-tint-solid: color-mix(in oklch, var(--color-veil) 68%, transparent);
 
   --font-display: 'Fraunces', ui-serif, Georgia, serif;
   --font-body: 'Geist', ui-sans-serif, system-ui, sans-serif;
@@ -673,23 +675,28 @@ button {
   padding-top: var(--space-sm);
 }
 
-/* One line, always: the text links sit left, the repo link anchors the right
-   edge. Nothing here may wrap onto a second line. */
+/* The text links sit left, the sound and repo icons anchor the right edge.
+   The icons never shrink or move: when the links don't fit beside them (a
+   320px phone, or Indonesian with Install app showing) the links stack,
+   each still on one line, rather than pushing the icons out of the card. */
 .setup-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
 }
 
 .setup-links {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-md);
+  min-width: 0;
+  column-gap: var(--space-sm);
 }
 
 .setup-icons {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
 }
 /* ---------- Segmented control ---------- */
@@ -1075,7 +1082,11 @@ button {
   border: 6px solid var(--board-frame);
   border-radius: 0;
   transform: rotateX(var(--tilt));
-  transform-style: preserve-3d;
+  /* Flat, deliberately: no transform-style: preserve-3d. Nothing on the board
+     moves in depth, and preserve-3d made every square and every square's
+     number its own compositor layer, ~200 of them. A phone swapping that
+     many layers in and out as effects start and stop flickered the whole
+     board on every roll. Flattened, the board is one tilted plane. */
   /* Depth comes from --board-edge (per scene); the inset hairline is a printed
      keyline just inside the frame. */
   box-shadow: var(--board-edge), inset 0 0 0 1px color-mix(in oklch, var(--color-veil) 18%, transparent);
@@ -1143,6 +1154,15 @@ button {
   }
   to {
     transform: rotate(calc(var(--orn-rot, 0deg) + 6deg)) translateY(-6%);
+  }
+}
+
+/* On touch screens, phones mostly, the ornaments hold still: two dozen
+   endless sways inside the tilted board cost a style pass every frame, for
+   a detail too small and faint to notice at that size. */
+@media (pointer: coarse) {
+  .cell-ornament {
+    animation: none;
   }
 }
 
@@ -1237,8 +1257,10 @@ button {
 /* A landing ripples out over two rings of squares (see flashCell): each
    rises and settles on one sine-shaped swell, later and softer the further
    it is, so the wave reads as one continuous ring rather than a flicker.
-   No translateZ: in the tilted board's 3D context a lifted square is drawn
-   over the snakes and ladders, which blink out as the wave passes. */
+   Tint only, no transform: a transform promotes each square to its own
+   layer inside the tilted 3D board, and twenty layers appearing at once
+   made the board flicker on phones (a lift also drew squares over the
+   snakes and ladders). */
 .cell.rippled {
   animation: rippleTile 0.9s var(--ripple-delay, 0ms) both cubic-bezier(0.37, 0, 0.63, 1);
 }
@@ -1246,11 +1268,9 @@ button {
 @keyframes rippleTile {
   0%,
   100% {
-    transform: none;
     box-shadow: inset 0 0 0 40px color-mix(in oklch, var(--color-accent-bright) 0%, transparent);
   }
   45% {
-    transform: scale(calc(1 + 0.025 * var(--ripple-amp, 1)));
     box-shadow: inset 0 0 0 40px color-mix(in oklch, var(--color-accent-bright) calc(16% * var(--ripple-amp, 1)), transparent);
   }
 }
@@ -1266,7 +1286,12 @@ button {
   }
 }
 
-/* The square under whoever's turn it is, breathing in their colour. */
+/* The square under whoever's turn it is, breathing in their colour. This
+   one stays a box-shadow on the cell, a small repaint, on purpose: an
+   opacity animation would promote it to its own compositor layer, and a
+   layer that appears and vanishes inside the tilted 3D board (the class
+   comes off the moment the dice are thrown) makes the browser rebuild the
+   board's layers, which flickers the whole board on phones. */
 .cell.cell-active {
   animation: activeSquare 2.4s ease-in-out infinite;
 }
@@ -1441,7 +1466,7 @@ button {
 
 /* With a real scene behind, the tiled photo would only muddy it. */
 :root[data-backdrop='on'] .scene-photo {
-  opacity: 0;
+  display: none;
 }
 
 :root[data-backdrop='on'] .scene-texture {
@@ -1610,11 +1635,15 @@ button {
 
 /* Caustics: bright veins of light where noise crosses its midline. Each
    layer slides by exactly one of its own tiles per loop, so it's seamless. */
+/* Each layer overhangs the screen by exactly one tile, and only on the side
+   it slides in from (A moves down-right by 400px, B down-left by 560px), so
+   the texture never runs out. The old symmetric overhang made each layer
+   ~27 megapixels at 3x on a phone, most of it never on screen. */
 .scene-events > .ev-caustics {
-  top: -560px;
-  left: -560px;
-  width: calc(100% + 1120px);
-  height: calc(100% + 1120px);
+  top: -400px;
+  left: -400px;
+  width: calc(100% + 400px);
+  height: calc(100% + 400px);
   opacity: 0.75;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='c' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.011' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 .08 .75 .08 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
   background-size: 400px 400px;
@@ -1623,6 +1652,10 @@ button {
 /* A second, larger tile at its own size (560px), so the two patterns drift
    through each other without the 400px repeat ever lining up. */
 .scene-events > .ev-caustics-b {
+  top: -560px;
+  left: 0;
+  width: calc(100% + 560px);
+  height: calc(100% + 560px);
   opacity: 0.55;
   background-size: 560px 560px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='c' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.016' numOctaves='2' seed='31' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 .06 .6 .06 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
@@ -1747,70 +1780,88 @@ button {
   pointer-events: none;
   /* Lit from the top left, so the cast shadow falls down and to the right. */
   filter: drop-shadow(0.12em 0.22em 0.16em var(--color-shadow-line));
+  /* Its own layer for as long as the board exists. Otherwise the browser
+     promotes it when a snake starts to stir and flattens it back into the
+     board when the stir ends, and each switch redraws the whole board:
+     that was the flicker phones showed every few seconds. */
+  will-change: transform;
 }
 
-/* Snakes idle: the head sways a few degrees from the neck, the tongue
-   flicks, and a glint runs down the back. Pivots are set per snake in
-   script.js in board units, hence transform-box: view-box. */
+/* Snakes and ladders stir one at a time, now and then (see stirBoard in
+   script.js), never all at once and never on a loop. #board-lines is one
+   detailed SVG under a drop-shadow filter: while anything inside it moves,
+   the whole thing is re-rasterised and re-shadowed every frame, which on a
+   phone was most of each frame's budget. Between stirs it's a still image.
+   On a stir the head sways a few degrees from the neck, the tongue flicks,
+   and a glint runs down the back. Pivots are set per snake in script.js in
+   board units, hence transform-box: view-box. */
+/* The stirring parts keep standing layers too, for the same reason as the
+   SVG itself: promoted and dropped around every stir, they redrew it. */
 #board-lines .snake-head {
   transform-box: view-box;
-  animation: snakeSway 5.5s ease-in-out infinite;
-  animation-delay: var(--head-delay, 0s);
+  will-change: transform;
 }
 
-@keyframes snakeSway {
+#board-lines .stir .snake-head {
+  animation: snakeStir 2.8s ease-in-out;
+}
+
+@keyframes snakeStir {
   0%,
   100% {
+    transform: rotate(0deg);
+  }
+  30% {
     transform: rotate(-3deg);
   }
-  50% {
+  70% {
     transform: rotate(4deg);
   }
 }
 
 #board-lines .snake-tongue {
   transform-box: view-box;
+  will-change: transform;
   transform: rotate(var(--heading)) scaleX(0) rotate(calc(-1 * var(--heading)));
-  animation: tongueFlick 4.2s ease-in-out infinite;
-  animation-delay: var(--tongue-delay, 0s);
+}
+
+#board-lines .stir .snake-tongue {
+  animation: tongueFlick 1.4s ease-in-out 0.6s;
 }
 
 @keyframes tongueFlick {
   0%,
-  78%,
+  60%,
   100% {
     transform: rotate(var(--heading)) scaleX(0) rotate(calc(-1 * var(--heading)));
   }
-  82%,
-  90% {
+  18%,
+  45% {
     transform: rotate(var(--heading)) scaleX(1) rotate(calc(-1 * var(--heading)));
   }
-  86% {
+  31% {
     transform: rotate(var(--heading)) scaleX(0.55) rotate(calc(-1 * var(--heading)));
   }
 }
 
-#board-lines .snake-sheen {
-  stroke-dashoffset: 110;
-  animation: snakeSheen 9s linear infinite;
-  animation-delay: var(--sheen-delay, 0s);
-}
-
-@keyframes snakeSheen {
-  0% {
-    stroke-dashoffset: 110;
-  }
-  45%,
-  100% {
-    stroke-dashoffset: -10;
-  }
-}
-
-/* The same glint, running up each ladder rail on a slower clock. */
+/* The glint, down a snake's back or up a ladder's rails. */
+#board-lines .snake-sheen,
 #board-lines .ladder-sheen {
   stroke-dashoffset: 110;
-  animation: snakeSheen 11s linear infinite;
-  animation-delay: var(--sheen-delay, 0s);
+}
+
+#board-lines .stir .snake-sheen,
+#board-lines .ladder-sheen.stir {
+  animation: sheenRun 1.8s linear 0.3s;
+}
+
+@keyframes sheenRun {
+  from {
+    stroke-dashoffset: 110;
+  }
+  to {
+    stroke-dashoffset: -10;
+  }
 }
 
 /* A charmed snake fades off the board. The duration is set from script.js
@@ -1839,6 +1890,9 @@ button {
   transform: rotateX(calc(-1 * var(--tilt)));
   transform-origin: bottom center;
   filter: drop-shadow(0 3px 3px var(--color-shadow-piece));
+  /* Same reason as #board-lines: a pawn hops, bobs and travels, and without
+     a standing layer it was promoted and dropped on every step. */
+  will-change: transform;
 }
 
 .token .pawn {
@@ -1884,6 +1938,17 @@ button {
   100% {
     transform: rotateX(calc(-1 * var(--tilt))) translateY(0) scaleX(1) scaleY(1);
   }
+}
+
+/* Walking: on the board rather than in a square (see walkToken), gliding to
+   each square's centre as it hops. */
+.token.walking {
+  bottom: auto;
+  z-index: 6;
+  margin-top: calc(var(--token-w) * -0.85);
+  transition:
+    left calc(var(--step-ms) * 0.8) cubic-bezier(0.45, 0, 0.35, 1),
+    top calc(var(--step-ms) * 0.8) cubic-bezier(0.45, 0, 0.35, 1);
 }
 
 .token.travelling {
@@ -1990,7 +2055,19 @@ button {
    screen asking to be pressed. Stops the moment the turn is under way. The
    die on it gives a little shake every few seconds, too. */
 .roll-btn.ready {
-  animation: ready 2.4s ease-in-out infinite;
+  position: relative;
+}
+
+/* The ring is its own element, scaled and faded: compositor work only,
+   where animating the button's box-shadow repainted it every frame. */
+.roll-btn.ready::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-accent-bright) 55%, transparent);
+  pointer-events: none;
+  animation: ready 2.4s ease-out infinite;
 }
 
 .roll-btn.ready .icon {
@@ -2015,12 +2092,14 @@ button {
 }
 
 @keyframes ready {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-accent-bright) 45%, transparent);
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
   }
-  55% {
-    box-shadow: 0 0 0 8px transparent;
+  55%,
+  100% {
+    opacity: 0;
+    transform: scale(1.08, 1.32);
   }
 }
 
@@ -2274,6 +2353,17 @@ button {
 @keyframes fadeIn {
   from {
     opacity: 0;
+  }
+}
+
+/* On touch screens the veil behind the die doesn't blur. A backdrop-filter
+   fading in over the tilted board is a known flicker on Android Chrome, and
+   every roll opens this overlay; a deeper tint does the same job. */
+@media (pointer: coarse) {
+  .dice-overlay {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--dice-tint-solid);
   }
 }
 
@@ -3080,7 +3170,7 @@ button {
   .board.dealing,
   .board.dealing .cell,
   .cell.landed::after,
-  .roll-btn.ready,
+  .roll-btn.ready::after,
   .score-card.bump,
   .chip-btn.cycled,
   .win-row,
@@ -3125,5 +3215,67 @@ button {
   .icon-btn:active,
   .color-chip:active {
     transform: none;
+  }
+}
+
+/* ---------- Touch screens: stay inside a phone's graphics memory ----------
+   Every moving layer is a bitmap the GPU keeps at the screen's full density,
+   3x on most phones. The game screen held 45-94 megapixels of them (180-375
+   MB); a phone browser gets a fraction of that, and when it runs out it drops
+   parts of the screen and redraws them — the flicker seen while idle, while a
+   pawn walked and when a card opened. So on touch screens the backdrop photo
+   is the scene on its own (the tiled texture under it stops), the board's
+   surface stops drifting and paints into the board itself (see
+   applyTextures), and the sheen, the sunlight wash and the second caustics
+   layer are left out. The living layers (wildlife, set pieces) stay. */
+@media (pointer: coarse) {
+  :root[data-backdrop='on'] .scene-texture,
+  .scene-light,
+  .board-sheen,
+  .scene-events > .ev-caustics-b {
+    display: none;
+  }
+
+  .board-texture,
+  .board-photo {
+    will-change: auto;
+  }
+
+  /* A stir is only the glint here: a swaying head or flicking tongue gets a
+     small layer of its own inside the board's drawing while it moves, and
+     that coming and going redrew the drawing. The tongue rests out. */
+  #board-lines .snake-head,
+  #board-lines .snake-tongue {
+    will-change: auto;
+  }
+
+  #board-lines .stir .snake-head,
+  #board-lines .stir .snake-tongue {
+    animation: none;
+  }
+
+  #board-lines .snake-tongue {
+    transform: none;
+  }
+
+  /* Question, surprise and other cards open over the tilted board, and a
+     backdrop blur fading in over it is a known Android Chrome flicker (the
+     dice veil drops its blur for the same reason). They get the same
+     near-opaque tint as the reduced-transparency fallback instead. */
+  :root,
+  :root[data-glass='dark'] {
+    --glass-modal: color-mix(in oklch, var(--glass-base) 96%, transparent);
+  }
+
+  .modal-box,
+  .log-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* The landing ring is a scaled, fading layer that appears inside the board
+     for a moment; the ripple around the square already marks the landing. */
+  .cell.landed::after {
+    display: none;
   }
 }

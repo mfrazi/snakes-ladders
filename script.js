@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-25a';
+  const BUILD = '2026-09-25e';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -2049,11 +2049,15 @@
     document.documentElement.style.setProperty('--die-tex', url(theme.cellTexture));
     document.documentElement.style.setProperty('--die-tex-size', theme.cellTextureSize);
 
+    // On touch screens the board's surface holds still, so it paints into
+    // the board instead of being two more full-density layers (see the
+    // touch-screen block at the end of style.css).
+    const boardDrifts = !window.matchMedia('(pointer: coarse)').matches;
     const board = document.querySelector('.board-texture');
     if (board) {
       board.style.setProperty('--cell-texture', url(theme.cellTexture));
       board.style.setProperty('--cell-tex-size', theme.cellTextureSize);
-      run(board, oneTile(theme.cellTextureSize), theme.boardDriftDuration);
+      if (boardDrifts) run(board, oneTile(theme.cellTextureSize), theme.boardDriftDuration);
     }
 
     const boardPhoto = document.querySelector('.board-photo');
@@ -2061,11 +2065,13 @@
       boardPhoto.style.setProperty('--board-photo', `url("${theme.photo}")`);
       boardPhoto.style.setProperty('--board-photo-size', theme.photoBoardSize);
       boardPhoto.style.setProperty('--board-photo-opacity', theme.photoBoardOpacity);
-      run(
-        boardPhoto,
-        oneTile(`${theme.photoBoardSize} ${theme.photoBoardSize}`),
-        theme.boardDriftDuration
-      );
+      if (boardDrifts) {
+        run(
+          boardPhoto,
+          oneTile(`${theme.photoBoardSize} ${theme.photoBoardSize}`),
+          theme.boardDriftDuration
+        );
+      }
     }
 
     console.info(
@@ -2663,7 +2669,6 @@
         'stroke-linecap': 'round',
         'stroke-dasharray': '8 192',
       });
-      sheen.style.setProperty('--sheen-delay', `-${(from * 3 + (side > 0 ? 0 : 2)) % 11}s`);
       group.appendChild(sheen);
     });
 
@@ -2842,7 +2847,6 @@
       'stroke-linejoin': 'round',
       'stroke-dasharray': '9 191',
     });
-    sheen.style.setProperty('--sheen-delay', `-${(from * 7) % 9}s`);
     group.appendChild(sheen);
     group.appendChild(
       svgEl('path', {
@@ -2884,12 +2888,10 @@
     const neck = at(0, 0);
     const headGroup = svgEl('g', { class: 'snake-head' });
     headGroup.style.setProperty('transform-origin', `${neck.x}px ${neck.y}px`);
-    headGroup.style.setProperty('--head-delay', `-${(from * 3) % 5}s`);
     const tongueRoot = at(3.2, 0);
     const tongue = svgEl('g', { class: 'snake-tongue' });
     tongue.style.setProperty('transform-origin', `${tongueRoot.x}px ${tongueRoot.y}px`);
     tongue.style.setProperty('--heading', `${heading}deg`);
-    tongue.style.setProperty('--tongue-delay', `-${(from * 5) % 7}s`);
     headGroup.appendChild(tongue);
     const bodyGroup = group;
     group = headGroup;
@@ -3073,8 +3075,11 @@
       token.style.setProperty('--token-bottom', `${4 + row * 34}%`);
       token.classList.toggle('active-turn', state.current === i && !state.finished && !animating);
 
+      // A pawn mid-walk or mid-trip lives on the board, not in a square;
+      // the move puts it back in its square when it arrives.
+      const moving = token.classList.contains('walking') || token.classList.contains('travelling');
       const cell = cellEls[player.pos];
-      if (cell && token.parentElement !== cell) cell.appendChild(token);
+      if (cell && !moving && token.parentElement !== cell) cell.appendChild(token);
     });
 
     // The square under whoever's turn it is breathes in their colour.
@@ -3089,12 +3094,25 @@
     }
   }
 
+  // The pawn walks across the board itself, gliding from square to square,
+  // and only settles into the last square's element when it arrives. Moving
+  // it into a new square's element on every step rebuilt its compositor
+  // layer each time, which phones showed as a flicker on every hop.
   async function walkToken(playerIndex, from, to) {
     if (from === to) return;
     const step = to > from ? 1 : -1;
+    const token = tokenEl(playerIndex);
+    const place = (num) => {
+      const c = cellCenter(num);
+      token.style.left = `${c.x}%`;
+      token.style.top = `${c.y}%`;
+    };
+    place(from);
+    token.classList.add('walking');
+    $('board').appendChild(token);
+    void token.offsetWidth;
     for (let pos = from + step, n = 0; ; pos += step, n++) {
-      const token = tokenEl(playerIndex);
-      cellEls[pos].appendChild(token);
+      place(pos);
       token.classList.remove('hopping');
       void token.offsetWidth;
       token.classList.add('hopping');
@@ -3104,6 +3122,10 @@
       await sleep(STEP_MS);
       if (pos === to) break;
     }
+    token.classList.remove('walking');
+    token.style.left = '';
+    token.style.top = '';
+    cellEls[to].appendChild(token);
   }
 
   async function travelToken(playerIndex, from, to) {
@@ -3170,6 +3192,7 @@
   function startBoardMotion() {
     stopBoardMotion();
     if (REDUCED_MOTION) return;
+    stirTimer = setTimeout(stirBoard, 1500);
     const layer = document.createElement('div');
     layer.className = 'board-glints';
     $('board').appendChild(layer);
@@ -3197,9 +3220,37 @@
     }
   }
 
+  // One snake or one ladder at a time comes alive for a moment: a snake
+  // sways its head, flicks its tongue and a glint runs down its back; a
+  // ladder's rails catch the light. The board's SVG sits under a drop-shadow
+  // filter, so while anything inside it moves the whole board is redrawn
+  // every frame. Stirring one piece now and then, instead of every snake on
+  // an endless loop, leaves it a still image the GPU reuses most of the
+  // time. Touch devices, usually phones, get longer rests.
+  let stirTimer = 0;
+  const STIR_REST = window.matchMedia('(pointer: coarse)').matches ? [4500, 4000] : [2200, 2600];
+
+  function stirBoard() {
+    const svg = $('board-lines');
+    if (svg && !document.hidden) {
+      const snakes = [...svg.querySelectorAll('[data-snake]:not(.charmed)')];
+      const ladders = [...new Set([...svg.querySelectorAll('.ladder-sheen')].map((el) => el.parentNode))];
+      const pickLadder = ladders.length && (!snakes.length || Math.random() < 0.35);
+      const pool = pickLadder ? ladders : snakes;
+      if (pool.length) {
+        const piece = pool[Math.floor(Math.random() * pool.length)];
+        const parts = pickLadder ? [...piece.querySelectorAll('.ladder-sheen')] : [piece];
+        parts.forEach((el) => el.classList.add('stir'));
+        setTimeout(() => parts.forEach((el) => el.classList.remove('stir')), 3200);
+      }
+    }
+    stirTimer = setTimeout(stirBoard, STIR_REST[0] + Math.random() * STIR_REST[1]);
+  }
+
   // Called before the board is rebuilt or left: a wink finishing on a
   // detached glint would otherwise keep scheduling the next one forever.
   function stopBoardMotion() {
+    clearTimeout(stirTimer);
     glints.forEach((animation) => {
       animation.onfinish = null;
       animation.cancel();
