@@ -4,8 +4,8 @@
 User-agent: *
 Allow: /
 
-# Dev-only files never reach the deployed site (see .assetsignore), so there is
-# nothing to disallow here. Listing paths that don't exist would only advertise
-# them.
+# Dev-only files never reach the deployed site (scripts/build.js decides what
+# goes into dist/), so there is nothing to disallow here. Listing paths that
+# don't exist would only advertise them.
 
 Sitemap: https://snakes-ladders.mfrazi.me/sitemap.xml

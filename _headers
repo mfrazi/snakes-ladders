@@ -13,7 +13,7 @@
   # Worth having despite there being no known XSS hole: the AI API key lives
   # in localStorage, and a CSP is what stops a future injected script from
   # reading it and shipping it somewhere. connect-src is the load-bearing
-  # part — it pins outbound requests to the three AI providers the settings
+  # part — it pins outbound requests to the four AI providers the settings
   # panel actually offers, so exfiltration to any other host is blocked.
   #
   # data: in img-src is required — the animated board textures are inline
@@ -26,7 +26,7 @@
   # Allowing the one host it loads from, plus the origin the beacon reports
   # to, is the narrow fix. Turning Web Analytics off in the Cloudflare
   # dashboard instead would let both entries come back out.
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com https://openrouter.ai https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'
   # Nothing here is meant to be framed, and the game is a single trusted
   # surface — framing it only enables clickjacking. frame-ancestors above is
   # the modern equivalent; this covers browsers that still only read this.

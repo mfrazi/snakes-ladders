@@ -4,22 +4,29 @@ A Snakes & Ladders game for 2–6 people sharing one device. Every square you la
 on starts a conversation — a themed question or a surprise — and the board is
 rebuilt from scratch every game.
 
-**[Play it →](https://snakes-ladders.mfrazi.me)**
+**[Play it →](https://snakes-ladders.mfrazi.me)** ·
+**[Main pakai bahasa Indonesia →](https://snakes-ladders.mfrazi.me/id)**
 
 Pick a mode before you start:
 
 - **Couples** — written for two partners
 - **Friends** — nothing romantic in it
 
-624 questions per mode across 12 topics, plus surprise cards, six board scenes,
-and sound. Installs as an app and works offline. Optionally, bring your own AI
-API key and every question is written fresh for the people playing.
+624 questions per mode across 12 topics, plus surprise cards and six living
+board scenes to pick from — a candlelit café, a forest, the shore, a meadow, a
+desert sunset and a starry night — each with its own wildlife, moving light
+and ambient sound. Play in **English** or **Bahasa Indonesia** — switch any
+time with the EN / ID toggle. Installs as an app and works offline.
+Optionally, bring your own AI API key (OpenRouter, Claude, OpenAI or Gemini)
+and every question is written fresh for the people playing, in the language
+you're playing in.
 
 ## How to play
 
-Add 2–6 players, pick your topics, and take turns tapping **Roll**. Land on a
-square and you get a question or a surprise. Type an answer to keep it, or tap
-**Another** for a different question. First to land exactly on 100 wins.
+Pick a scene, add 2–6 players (each gets a colour), pick your topics, and
+take turns tapping **Roll**. Land on a square and you get a question or a
+surprise. Type an answer to keep it, or tap **Another** for a different
+question. First to land exactly on 100 wins.
 
 Answering earns hearts, and **Powers** lets you spend them before you roll:
 **Shield** (4) against your next snake, **Boost** (4) your roll by 3,
@@ -30,7 +37,7 @@ a **Snake charmer** (13) to remove a snake from the board, or **Swap places**
 snake or overshoot 100.
 
 The history drawer keeps every question and answer, and can download the lot as
-a text file.
+a text file. The speaker button cycles sound: everything, effects only, or off.
 
 ## Run it locally
 
