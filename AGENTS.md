@@ -208,15 +208,26 @@ shift against the pointer by 10, 22 and 36px (`initParallax`), the nearer
 ones more. Set on the layers themselves through the `translate` property, so
 it composes with their own animations and restyles nothing else.
 
-On the board, snakes idle: the head sways from the neck (`.snake-head`), the
+On the board, snakes stir: the head sways from the neck (`.snake-head`), the
 tongue flicks (`.snake-tongue`) and a glint runs down the back
-(`.snake-sheen`). Pivots are set per snake in board units, hence
-`transform-box: view-box`. Ornaments sway on per-cell clocks from the same
-hash that places them. Pawns have a radial gloss and a rim light.
+(`.snake-sheen`); a ladder's rails catch the light (`.ladder-sheen`). Pivots
+are set per snake in board units, hence `transform-box: view-box`.
+**One piece at a time, now and then, never on a loop** (`stirBoard`: every
+2–5s on desktop, 4.5–8.5s on touch screens). `#board-lines` is one detailed
+SVG under a `drop-shadow` filter, and while anything inside it moves, the
+whole board is re-rasterised and re-shadowed every frame. With every snake
+and ladder idling on endless loops that was ~250ms of main-thread work per
+second on a 4×-throttled phone profile, most of each frame's budget; stirring
+one piece at a time brought it to ~80. Don't put an infinite animation
+inside that SVG. Ornaments sway on per-cell clocks from the same hash that
+places them, except on touch screens, where they hold still (a style pass
+per frame for a detail too small to see there). Pawns have a radial gloss
+and a rim light.
 
 The board itself moves too, quietly: a slow sheen sweeps across it
 (`.board-sheen`), glints wink on random squares (`startBoardMotion`), the
-finish square glows, the current player's square is marked (`.cell-active`),
+finish square glows, the current player's square breathes (`.cell-active`;
+a ring drawn once on `::before`, only its opacity animating),
 a walking pawn leaves a fading trail (`.stepped`), a landing sends a ripple
 over two rings of squares (`.rippled`), and a light runs up each ladder
 (`.ladder-sheen`). The ripple's delay and strength follow each square's true
@@ -359,6 +370,23 @@ Checked at 320, 375, 414 and 768px plus 1280×800 and a 926×428 landscape
 phone: no horizontal scroll, no wrapped labels, and the tilted board stays
 inside the screen. That last one is why the desktop board is `min(88vw, 78vh)`:
 at a 16° tilt the near edge projects ~7% wider than the layout box.
+
+### Performance on phones
+
+Measure on a throttled phone profile (390×844 at 3×, `isMobile`, CDP
+`Emulation.setCPUThrottlingRate` 4) and read main-thread time from CDP
+`Performance.getMetrics` (`TaskDuration`, `RecalcStyleDuration`) over a few
+seconds of the game screen, switching one feature off at a time. Headless
+frame rates are too noisy to judge by, because it rasterises in software. The rules this
+produced:
+
+- **Endless animations are transform or opacity only.** A looping
+  `box-shadow` (the active square, the Roll button's ring) repaints every
+  frame; draw the shadow once on a pseudo-element and animate its opacity or
+  scale instead. One-shot effects (ripple, step trail) can afford paint.
+- **Nothing loops inside `#board-lines`** (see "Board scenes").
+- **Touch screens drop what they can't show:** ornaments hold still, stirs
+  rest longer, and wildlife is already 40% fewer under 640px.
 
 ## Sound
 

@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-25a';
+  const BUILD = '2026-09-25b';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -2663,7 +2663,6 @@
         'stroke-linecap': 'round',
         'stroke-dasharray': '8 192',
       });
-      sheen.style.setProperty('--sheen-delay', `-${(from * 3 + (side > 0 ? 0 : 2)) % 11}s`);
       group.appendChild(sheen);
     });
 
@@ -2842,7 +2841,6 @@
       'stroke-linejoin': 'round',
       'stroke-dasharray': '9 191',
     });
-    sheen.style.setProperty('--sheen-delay', `-${(from * 7) % 9}s`);
     group.appendChild(sheen);
     group.appendChild(
       svgEl('path', {
@@ -2884,12 +2882,10 @@
     const neck = at(0, 0);
     const headGroup = svgEl('g', { class: 'snake-head' });
     headGroup.style.setProperty('transform-origin', `${neck.x}px ${neck.y}px`);
-    headGroup.style.setProperty('--head-delay', `-${(from * 3) % 5}s`);
     const tongueRoot = at(3.2, 0);
     const tongue = svgEl('g', { class: 'snake-tongue' });
     tongue.style.setProperty('transform-origin', `${tongueRoot.x}px ${tongueRoot.y}px`);
     tongue.style.setProperty('--heading', `${heading}deg`);
-    tongue.style.setProperty('--tongue-delay', `-${(from * 5) % 7}s`);
     headGroup.appendChild(tongue);
     const bodyGroup = group;
     group = headGroup;
@@ -3170,6 +3166,7 @@
   function startBoardMotion() {
     stopBoardMotion();
     if (REDUCED_MOTION) return;
+    stirTimer = setTimeout(stirBoard, 1500);
     const layer = document.createElement('div');
     layer.className = 'board-glints';
     $('board').appendChild(layer);
@@ -3197,9 +3194,37 @@
     }
   }
 
+  // One snake or one ladder at a time comes alive for a moment: a snake
+  // sways its head, flicks its tongue and a glint runs down its back; a
+  // ladder's rails catch the light. The board's SVG sits under a drop-shadow
+  // filter, so while anything inside it moves the whole board is redrawn
+  // every frame. Stirring one piece now and then, instead of every snake on
+  // an endless loop, leaves it a still image the GPU reuses most of the
+  // time. Touch devices, usually phones, get longer rests.
+  let stirTimer = 0;
+  const STIR_REST = window.matchMedia('(pointer: coarse)').matches ? [4500, 4000] : [2200, 2600];
+
+  function stirBoard() {
+    const svg = $('board-lines');
+    if (svg && !document.hidden) {
+      const snakes = [...svg.querySelectorAll('[data-snake]:not(.charmed)')];
+      const ladders = [...new Set([...svg.querySelectorAll('.ladder-sheen')].map((el) => el.parentNode))];
+      const pickLadder = ladders.length && (!snakes.length || Math.random() < 0.35);
+      const pool = pickLadder ? ladders : snakes;
+      if (pool.length) {
+        const piece = pool[Math.floor(Math.random() * pool.length)];
+        const parts = pickLadder ? [...piece.querySelectorAll('.ladder-sheen')] : [piece];
+        parts.forEach((el) => el.classList.add('stir'));
+        setTimeout(() => parts.forEach((el) => el.classList.remove('stir')), 3200);
+      }
+    }
+    stirTimer = setTimeout(stirBoard, STIR_REST[0] + Math.random() * STIR_REST[1]);
+  }
+
   // Called before the board is rebuilt or left: a wink finishing on a
   // detached glint would otherwise keep scheduling the next one forever.
   function stopBoardMotion() {
+    clearTimeout(stirTimer);
     glints.forEach((animation) => {
       animation.onfinish = null;
       animation.cancel();

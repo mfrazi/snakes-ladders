@@ -673,23 +673,28 @@ button {
   padding-top: var(--space-sm);
 }
 
-/* One line, always: the text links sit left, the repo link anchors the right
-   edge. Nothing here may wrap onto a second line. */
+/* The text links sit left, the sound and repo icons anchor the right edge.
+   The icons never shrink or move: when the links don't fit beside them (a
+   320px phone, or Indonesian with Install app showing) the links stack,
+   each still on one line, rather than pushing the icons out of the card. */
 .setup-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
 }
 
 .setup-links {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-md);
+  min-width: 0;
+  column-gap: var(--space-sm);
 }
 
 .setup-icons {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
 }
 /* ---------- Segmented control ---------- */
@@ -1146,6 +1151,15 @@ button {
   }
 }
 
+/* On touch screens, phones mostly, the ornaments hold still: two dozen
+   endless sways inside the tilted board cost a style pass every frame, for
+   a detail too small and faint to notice at that size. */
+@media (pointer: coarse) {
+  .cell-ornament {
+    animation: none;
+  }
+}
+
 .orn-br {
   right: 1px;
   bottom: 0;
@@ -1266,20 +1280,27 @@ button {
   }
 }
 
-/* The square under whoever's turn it is, breathing in their colour. */
-.cell.cell-active {
+/* The square under whoever's turn it is, breathing in their colour. The
+   ring is drawn once on a pseudo-element and only its opacity breathes:
+   animating the box-shadow itself repainted the square on every frame. */
+.cell.cell-active:not(.cell-finish)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in oklch, var(--player-color, var(--color-accent)) 70%, transparent),
+    inset 0 0 14px color-mix(in oklch, var(--player-color, var(--color-accent)) 30%, transparent);
+  pointer-events: none;
   animation: activeSquare 2.4s ease-in-out infinite;
 }
 
 @keyframes activeSquare {
   0%,
   100% {
-    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--player-color, var(--color-accent)) 35%, transparent);
+    opacity: 0.4;
   }
   50% {
-    box-shadow:
-      inset 0 0 0 2px color-mix(in oklch, var(--player-color, var(--color-accent)) 70%, transparent),
-      inset 0 0 14px color-mix(in oklch, var(--player-color, var(--color-accent)) 30%, transparent);
+    opacity: 1;
   }
 }
 
@@ -1749,21 +1770,31 @@ button {
   filter: drop-shadow(0.12em 0.22em 0.16em var(--color-shadow-line));
 }
 
-/* Snakes idle: the head sways a few degrees from the neck, the tongue
-   flicks, and a glint runs down the back. Pivots are set per snake in
-   script.js in board units, hence transform-box: view-box. */
+/* Snakes and ladders stir one at a time, now and then (see stirBoard in
+   script.js), never all at once and never on a loop. #board-lines is one
+   detailed SVG under a drop-shadow filter: while anything inside it moves,
+   the whole thing is re-rasterised and re-shadowed every frame, which on a
+   phone was most of each frame's budget. Between stirs it's a still image.
+   On a stir the head sways a few degrees from the neck, the tongue flicks,
+   and a glint runs down the back. Pivots are set per snake in script.js in
+   board units, hence transform-box: view-box. */
 #board-lines .snake-head {
   transform-box: view-box;
-  animation: snakeSway 5.5s ease-in-out infinite;
-  animation-delay: var(--head-delay, 0s);
 }
 
-@keyframes snakeSway {
+#board-lines .stir .snake-head {
+  animation: snakeStir 2.8s ease-in-out;
+}
+
+@keyframes snakeStir {
   0%,
   100% {
+    transform: rotate(0deg);
+  }
+  30% {
     transform: rotate(-3deg);
   }
-  50% {
+  70% {
     transform: rotate(4deg);
   }
 }
@@ -1771,46 +1802,45 @@ button {
 #board-lines .snake-tongue {
   transform-box: view-box;
   transform: rotate(var(--heading)) scaleX(0) rotate(calc(-1 * var(--heading)));
-  animation: tongueFlick 4.2s ease-in-out infinite;
-  animation-delay: var(--tongue-delay, 0s);
+}
+
+#board-lines .stir .snake-tongue {
+  animation: tongueFlick 1.4s ease-in-out 0.6s;
 }
 
 @keyframes tongueFlick {
   0%,
-  78%,
+  60%,
   100% {
     transform: rotate(var(--heading)) scaleX(0) rotate(calc(-1 * var(--heading)));
   }
-  82%,
-  90% {
+  18%,
+  45% {
     transform: rotate(var(--heading)) scaleX(1) rotate(calc(-1 * var(--heading)));
   }
-  86% {
+  31% {
     transform: rotate(var(--heading)) scaleX(0.55) rotate(calc(-1 * var(--heading)));
   }
 }
 
-#board-lines .snake-sheen {
-  stroke-dashoffset: 110;
-  animation: snakeSheen 9s linear infinite;
-  animation-delay: var(--sheen-delay, 0s);
-}
-
-@keyframes snakeSheen {
-  0% {
-    stroke-dashoffset: 110;
-  }
-  45%,
-  100% {
-    stroke-dashoffset: -10;
-  }
-}
-
-/* The same glint, running up each ladder rail on a slower clock. */
+/* The glint, down a snake's back or up a ladder's rails. */
+#board-lines .snake-sheen,
 #board-lines .ladder-sheen {
   stroke-dashoffset: 110;
-  animation: snakeSheen 11s linear infinite;
-  animation-delay: var(--sheen-delay, 0s);
+}
+
+#board-lines .stir .snake-sheen,
+#board-lines .ladder-sheen.stir {
+  animation: sheenRun 1.8s linear 0.3s;
+}
+
+@keyframes sheenRun {
+  from {
+    stroke-dashoffset: 110;
+  }
+  to {
+    stroke-dashoffset: -10;
+  }
 }
 
 /* A charmed snake fades off the board. The duration is set from script.js
@@ -1990,7 +2020,19 @@ button {
    screen asking to be pressed. Stops the moment the turn is under way. The
    die on it gives a little shake every few seconds, too. */
 .roll-btn.ready {
-  animation: ready 2.4s ease-in-out infinite;
+  position: relative;
+}
+
+/* The ring is its own element, scaled and faded: compositor work only,
+   where animating the button's box-shadow repainted it every frame. */
+.roll-btn.ready::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-accent-bright) 55%, transparent);
+  pointer-events: none;
+  animation: ready 2.4s ease-out infinite;
 }
 
 .roll-btn.ready .icon {
@@ -2015,12 +2057,14 @@ button {
 }
 
 @keyframes ready {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-accent-bright) 45%, transparent);
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
   }
-  55% {
-    box-shadow: 0 0 0 8px transparent;
+  55%,
+  100% {
+    opacity: 0;
+    transform: scale(1.08, 1.32);
   }
 }
 
@@ -3080,7 +3124,7 @@ button {
   .board.dealing,
   .board.dealing .cell,
   .cell.landed::after,
-  .roll-btn.ready,
+  .roll-btn.ready::after,
   .score-card.bump,
   .chip-btn.cycled,
   .win-row,
@@ -3102,7 +3146,7 @@ button {
   .board-sheen,
   .cell.rippled,
   .cell.stepped,
-  .cell.cell-active,
+  .cell.cell-active::before,
   .cell.cell-finish::before,
   .dice-overlay.settled .dice-lift,
   .dice-overlay.settled .dice-glow,
