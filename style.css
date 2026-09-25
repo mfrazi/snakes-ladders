@@ -620,11 +620,12 @@ button {
   inset: -6px;
 }
 
-/* ---- Topics wrap to their own widths: twelve chips in about four rows on
-   a phone, rather than six rows of fixed halves. */
+/* ---- Topics sit in a grid of equal boxes: as many columns as fit the
+   longest label ("Home & Family", "Petualangan") — two on a phone, three on
+   the desktop card. */
 .theme-chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
   gap: var(--space-2xs);
 }
 
@@ -632,8 +633,9 @@ button {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
+  min-width: 0;
   height: 36px;
-  padding-inline: var(--space-sm);
+  padding-inline: var(--space-xs);
   border: 1px solid var(--color-rule);
   border-radius: var(--radius-control);
   background: transparent;
@@ -1214,7 +1216,7 @@ button {
   inset: 0;
   z-index: 1;
   background: radial-gradient(circle, color-mix(in oklch, var(--color-accent-bright) 55%, transparent), transparent 70%);
-  animation: landRipple 0.85s ease-out forwards;
+  animation: landRipple 1.1s cubic-bezier(0.25, 0.8, 0.35, 1) forwards;
 }
 
 @keyframes landRipple {
@@ -1232,15 +1234,24 @@ button {
    the board is where people read, so it moves the way light moves on a
    tabletop, not the way a screen flashes. */
 
-/* The eight squares around a landing lift in turn (see flashCell). */
+/* A landing ripples out over two rings of squares (see flashCell): each
+   rises and settles on one sine-shaped swell, later and softer the further
+   it is, so the wave reads as one continuous ring rather than a flicker.
+   No translateZ: in the tilted board's 3D context a lifted square is drawn
+   over the snakes and ladders, which blink out as the wave passes. */
 .cell.rippled {
-  animation: rippleTile 0.5s var(--ripple-delay, 0ms) both var(--ease-out);
+  animation: rippleTile 0.9s var(--ripple-delay, 0ms) both cubic-bezier(0.37, 0, 0.63, 1);
 }
 
 @keyframes rippleTile {
-  35% {
-    transform: translateZ(4px) scale(1.05);
-    box-shadow: inset 0 0 0 40px color-mix(in oklch, var(--color-accent-bright) 12%, transparent);
+  0%,
+  100% {
+    transform: none;
+    box-shadow: inset 0 0 0 40px color-mix(in oklch, var(--color-accent-bright) 0%, transparent);
+  }
+  45% {
+    transform: scale(calc(1 + 0.025 * var(--ripple-amp, 1)));
+    box-shadow: inset 0 0 0 40px color-mix(in oklch, var(--color-accent-bright) calc(16% * var(--ripple-amp, 1)), transparent);
   }
 }
 

@@ -3,7 +3,7 @@
 
   // Bump when shipping changes — lets you confirm the browser isn't serving a
   // stale cached copy (check the console line on startup).
-  const BUILD = '2026-09-24c';
+  const BUILD = '2026-09-25a';
 
   const STORAGE_KEY = 'snakeLoveGame_v5';
   const AI_KEY = 'snakeLoveAI_v1';
@@ -3138,19 +3138,22 @@
     const cell = cellEls[num];
     if (!cell || REDUCED_MOTION) return;
     replayAnimation(cell, 'landed');
-    setTimeout(() => cell.classList.remove('landed'), 900);
-    // The landing ripples out: the eight squares around it lift in turn,
-    // the nearest first.
+    setTimeout(() => cell.classList.remove('landed'), 1200);
+    // The landing ripples out over two rings of squares. Delay and strength
+    // follow the true distance from the landing, not the ring, so the wave
+    // front is round and each square fades in rather than stepping.
     const index = CELL_INDEX[num];
     const row = Math.floor(index / 10);
     const col = index % 10;
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
+    for (let dr = -2; dr <= 2; dr++) {
+      for (let dc = -2; dc <= 2; dc++) {
         const r = row + dr;
         const c = col + dc;
-        if ((!dr && !dc) || r < 0 || r > 9 || c < 0 || c > 9) continue;
+        const dist = Math.hypot(dr, dc);
+        if (!dist || dist > 2.3 || r < 0 || r > 9 || c < 0 || c > 9) continue;
         const neighbour = cellEls[CELL_ORDER[r * 10 + c]];
-        neighbour.style.setProperty('--ripple-delay', `${dr && dc ? 120 : 60}ms`);
+        neighbour.style.setProperty('--ripple-delay', `${Math.round(dist * 110)}ms`);
+        neighbour.style.setProperty('--ripple-amp', (1.15 - dist * 0.35).toFixed(2));
         pulse(neighbour, 'rippled');
       }
     }

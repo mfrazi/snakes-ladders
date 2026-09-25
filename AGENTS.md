@@ -218,8 +218,12 @@ The board itself moves too, quietly: a slow sheen sweeps across it
 (`.board-sheen`), glints wink on random squares (`startBoardMotion`), the
 finish square glows, the current player's square is marked (`.cell-active`),
 a walking pawn leaves a fading trail (`.stepped`), a landing sends a ripple
-to the neighbouring squares (`.rippled`), and a light runs up each ladder
-(`.ladder-sheen`). Everything here stops under `prefers-reduced-motion` (the
+over two rings of squares (`.rippled`), and a light runs up each ladder
+(`.ladder-sheen`). The ripple's delay and strength follow each square's true
+distance from the landing (`--ripple-delay`, `--ripple-amp`), on one
+sine-shaped swell, so the front is round and smooth. It scales and tints the
+squares but never lifts them with `translateZ`: in the tilted board's 3D
+context a lifted square draws over the snakes and ladders. Everything here stops under `prefers-reduced-motion` (the
 tongue then rests out).
 
 **The die** is thrown rather than spun: `diceToss` (style.css) arcs it up and
@@ -338,7 +342,8 @@ stamp at the top of `style.css` records the choices.
   `index.html`. Emoji survive only as content: surprise cards and board
   ornaments. Topics and players are marked with a colour swatch, not an
   emoji: a player is a name and a colour, picked from the chip in their row,
-  and no two players share one.
+  and no two players share one. Topic chips are a grid of equal boxes, as
+  many columns as fit the longest label (two on a phone, three on desktop).
 - **Clickable text never wraps.** Buttons and links are `white-space: nowrap`;
   every touch target is at least 44px (small icons expand with `::before`).
 - **Hover styles live in `@media (hover: hover)`** so taps don't leave sticky
