@@ -307,84 +307,88 @@
 <main>
 <!-- SETUP -->
 <section id="setup-screen" class="screen">
-  <div class="setup-card">
-    <h1 class="visually-hidden" data-i18n="appTitle">Snakes &amp; Ladders: Love &amp; Friends Edition</h1>
+  <div class="setup-stage">
+    <div class="setup-card">
+      <h1 class="visually-hidden" data-i18n="appTitle">Snakes &amp; Ladders: Love &amp; Friends Edition</h1>
 
-    <!-- Mode and language share the first row: the card opens straight onto
-         the choices, with no heading or explanation above them. -->
-    <div class="setup-top">
-      <div class="segmented" id="mode-choice" role="group" data-i18n-attr="aria-label:mode"></div>
-      <div class="segmented segmented-mini" id="lang-choice" role="group" data-i18n-attr="aria-label:language"></div>
-    </div>
-
-    <section class="field">
-      <div class="field-head">
-        <h2 class="field-label" data-i18n="scene">Scene</h2>
-        <span class="field-value" id="scene-name" aria-live="polite"></span>
+      <!-- Mode and language share the first row: the card opens straight onto
+           the choices, with no heading or explanation above them. -->
+      <div class="setup-top">
+        <div class="segmented" id="mode-choice" role="group" data-i18n-attr="aria-label:mode"></div>
+        <div class="segmented segmented-mini" id="lang-choice" role="group" data-i18n-attr="aria-label:language"></div>
       </div>
-      <div class="scene-picker" id="scene-choice" role="radiogroup" data-i18n-attr="aria-label:scene"></div>
-    </section>
 
-    <section class="field">
-      <div class="field-head">
-        <h2 class="field-label" data-i18n="players">Players</h2>
-        <button type="button" id="add-player-btn" class="link-btn link-btn-compact">
-          <svg class="icon icon-sm"><use href="#i-plus" /></svg>
-          <span data-i18n="addPlayer">Add player</span>
-        </button>
-      </div>
-      <div id="player-list" class="player-list"></div>
-    </section>
+      <section class="field">
+        <div class="field-head">
+          <h2 class="field-label" data-i18n="scene">Scene</h2>
+          <span class="field-value" id="scene-name" aria-live="polite"></span>
+        </div>
+        <div class="scene-picker" id="scene-choice" role="radiogroup" data-i18n-attr="aria-label:scene"></div>
+      </section>
 
-    <section class="field">
-      <div class="field-head">
-        <h2 class="field-label" data-i18n="topics">Topics</h2>
-        <button type="button" id="theme-toggle-all" class="link-btn link-btn-compact">Clear all</button>
-      </div>
-      <div class="theme-chips" id="theme-chips"></div>
-    </section>
-
-    <div class="setup-foot">
-      <button type="button" id="start-btn" class="primary-btn block-btn" data-i18n="startGame">Start game</button>
-      <div class="setup-meta">
-        <div class="setup-links">
-          <button type="button" id="setup-ai-btn" class="link-btn">
-            <svg class="icon icon-sm"><use href="#i-chat" /></svg>
-            <span data-i18n="aiQuestions">AI questions</span>
-          </button>
-          <!--
-            Hidden until it can actually do something. Chrome/Edge reveal it
-            from the beforeinstallprompt event; iOS Safari never fires that
-            event and has no programmatic install at all, so there it becomes
-            a button that explains the Share > Add to Home Screen route
-            instead. Both cases are handled in script.js — see initInstall().
-          -->
-          <button type="button" id="install-btn" class="link-btn hidden">
-            <svg class="icon icon-sm"><use href="#i-install" /></svg>
-            <span data-i18n="installApp">Install app</span>
+      <section class="field">
+        <div class="field-head">
+          <h2 class="field-label" data-i18n="players">Players</h2>
+          <button type="button" id="add-player-btn" class="link-btn link-btn-compact">
+            <svg class="icon icon-sm"><use href="#i-plus" /></svg>
+            <span data-i18n="addPlayer">Add player</span>
           </button>
         </div>
-        <div class="setup-icons">
-          <!-- The same three-way sound switch as the game header: picking a
-               scene previews its ambience, so it can be muted from here too. -->
-          <button type="button" class="link-btn icon-link sound-toggle" title="Sound" aria-label="Sound">
-            <svg class="icon"><use href="#i-sound-on" /></svg>
-          </button>
-          <a
-            href="https://github.com/mfrazi/snakes-ladders"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="link-btn icon-link"
-            title="View source on GitHub"
-            aria-label="View source on GitHub"
-            data-i18n-attr="title:viewSource;aria-label:viewSource"
-          >
-            <svg class="icon"><use href="#i-github" /></svg>
-          </a>
+        <div id="player-list" class="player-list"></div>
+      </section>
+
+      <section class="field">
+        <div class="field-head">
+          <h2 class="field-label" data-i18n="topics">Topics</h2>
+          <button type="button" id="theme-toggle-all" class="link-btn link-btn-compact">Clear all</button>
+        </div>
+        <div class="theme-chips" id="theme-chips"></div>
+      </section>
+
+      <div class="setup-foot">
+        <button type="button" id="start-btn" class="primary-btn block-btn" data-i18n="startGame">Start game</button>
+        <div class="setup-meta">
+          <div class="setup-links">
+            <button type="button" id="setup-ai-btn" class="link-btn">
+              <svg class="icon icon-sm"><use href="#i-chat" /></svg>
+              <span data-i18n="aiQuestions">AI questions</span>
+            </button>
+            <!--
+              Hidden until it can actually do something. Chrome/Edge reveal it
+              from the beforeinstallprompt event; iOS Safari never fires that
+              event and has no programmatic install at all, so there it becomes
+              a button that explains the Share > Add to Home Screen route
+              instead. Both cases are handled in script.js — see initInstall().
+            -->
+            <button type="button" id="install-btn" class="link-btn hidden">
+              <svg class="icon icon-sm"><use href="#i-install" /></svg>
+              <span data-i18n="installApp">Install app</span>
+            </button>
+          </div>
+          <div class="setup-icons">
+            <!-- The same three-way sound switch as the game header: picking a
+                 scene previews its ambience, so it can be muted from here too. -->
+            <button type="button" class="link-btn icon-link sound-toggle" title="Sound" aria-label="Sound">
+              <svg class="icon"><use href="#i-sound-on" /></svg>
+            </button>
+            <a
+              href="https://github.com/mfrazi/snakes-ladders"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="link-btn icon-link"
+              title="View source on GitHub"
+              aria-label="View source on GitHub"
+              data-i18n-attr="title:viewSource;aria-label:viewSource"
+            >
+              <svg class="icon"><use href="#i-github" /></svg>
+            </a>
+          </div>
         </div>
       </div>
     </div>
   </div>
+  <!-- seo-about: scripts/build.js puts the Indonesian landing page's about
+       section here (seo-id.js `about`), below the card. / has none. -->
 </section>
 
 <!-- GAME -->

@@ -124,8 +124,26 @@ the title, description, link previews, JSON-LD and `<noscript>` text from
 `scripts/seo-id.js`, and every `data-i18n` / `data-i18n-attr` string from
 `I18N.id`. It serves as `lang="id"`, which is what makes the app open in
 Indonesian. The copy targets what people type here: "ular tangga" is the
-game's own name in Indonesia, plus "online", "game pasangan", "deep talk".
+game's own name in Indonesia, and the target searches are "ular tangga
+online", "ular tangga gratis", "main ular tangga gratis", "ular tangga
+pertanyaan", "ular tangga ngobrol", "ular tangga pasangan" and "ular tangga
+LDR" (the list is in the header of `seo-id.js`). They go in sentences, never
+as a list. There's no `<meta name="keywords">`: Google ignores it, and Bing
+reads it as a spam signal.
 
+- **`/id` has a visible about section, and `/` doesn't.** Google runs the
+  JavaScript and then mostly ignores `<noscript>`. That left `/id` with
+  nothing to rank on but its title, a hidden `<h1>` and button labels. So
+  `seo-id.js` `about` (a short intro plus four question-and-answer
+  paragraphs, one per search) replaces the `<!-- seo-about -->` comment after
+  the setup card. It's a glass pane like the card: the same width, so it stays
+  inside the setup veil's column, and the same frost, so the card's contrast
+  numbers hold. It starts below the first screen because `.setup-stage` (around
+  the card) has `min-height: 100%`, so the card still opens alone on the scene.
+  Keep it visible. Text served to crawlers but hidden from players is
+  cloaking, and gets a page demoted. The LDR answer describes what really
+  works (one person shares their screen on a video call). The game has no
+  remote play, so don't let the copy suggest it does.
 - **hreflang** pairs the two, in `index.html` and in `sitemap.xml`, and each
   page lists both plus `x-default`. Google ignores a pair that isn't
   reciprocal, so keep the sets identical.

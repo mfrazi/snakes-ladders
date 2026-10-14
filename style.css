@@ -291,6 +291,7 @@ button {
    backdrops and the drawer veil are tint only. */
 
 .setup-card,
+.seo-about,
 .dock,
 .modal-box,
 .log-panel,
@@ -374,8 +375,6 @@ button {
 /* ---------- Setup ---------- */
 
 #setup-screen {
-  display: flex;
-  justify-content: center;
   height: 100%;
   padding: max(var(--space-sm), env(safe-area-inset-top)) var(--space-sm)
     max(var(--space-sm), env(safe-area-inset-bottom));
@@ -383,6 +382,16 @@ button {
   /* An overscroll at either end would otherwise chain to the document and
      rubber-band a blank strip into view on iOS. */
   overscroll-behavior: contain;
+}
+
+/* At least one screen tall, so the card centres in it (margin: auto, below)
+   exactly as it would alone, and anything after it, the about section on /id,
+   starts a scroll away. min-height rather than a grid track sized 100%: a
+   track that size stays put when the card is taller than a short screen, and
+   the card spills out over whatever follows. This grows with it. */
+.setup-stage {
+  display: flex;
+  min-height: 100%;
 }
 
 /* All the text on this screen is on this one pane, so it takes the modal
@@ -401,6 +410,49 @@ button {
   -webkit-backdrop-filter: var(--glass-filter-modal);
   backdrop-filter: var(--glass-filter-modal);
   animation: cardIn 0.5s var(--ease-out);
+}
+
+/* The Indonesian landing page's reading text (seo-id.js `about`, put in by
+   build.js; / has none). The same width and frost as the card, so it sits
+   inside the setup veil's column and the card's measured contrast holds for
+   it too. Body text is ink-2, not muted: it's long-form reading. */
+.seo-about {
+  width: 100%;
+  max-width: 440px;
+  margin: var(--space-sm) auto 0;
+  padding: var(--space-lg) var(--space-md);
+  border-radius: var(--radius-sheet);
+  background-color: var(--glass-modal);
+  -webkit-backdrop-filter: var(--glass-filter-modal);
+  backdrop-filter: var(--glass-filter-modal);
+  color: var(--color-ink-2);
+  line-height: 1.6;
+}
+
+.seo-about h2,
+.seo-about h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-ink);
+  text-wrap: balance;
+}
+
+.seo-about h2 {
+  font-size: var(--text-xl);
+  line-height: 1.15;
+  margin-bottom: var(--space-sm);
+}
+
+.seo-about h3 {
+  font-size: var(--text-lg);
+  line-height: 1.25;
+  margin: var(--space-lg) 0 var(--space-2xs);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-rule);
+}
+
+.seo-about p + p {
+  margin-top: var(--space-sm);
 }
 
 @keyframes cardIn {
@@ -3182,6 +3234,7 @@ button {
     --glass-sheen: transparent;
   }
   .setup-card,
+  .seo-about,
   .dock,
   .modal-box,
   .log-panel,

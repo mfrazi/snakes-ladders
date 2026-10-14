@@ -138,6 +138,9 @@ function buildIndonesianPage() {
   // "<" escaped, so no string in it can ever close the <script>.
   html = swap(html, ldPattern, JSON.stringify(ld, null, 2).replace(/</g, '\\u003c'), (s) => s);
   html = swap(html, /()<noscript>[\s\S]*?<\/noscript>()/, seo.noscript, (s) => s);
+  // The page's visible reading text, below the setup card. / has none: the
+  // marker is a comment there, and stays one.
+  html = swap(html, /()<!-- seo-about\b[\s\S]*?-->()/, seo.about, (s) => s);
 
   // Static strings, the same two hooks applyLanguage() fills at runtime.
   // Every data-i18n element holds plain text (applyLanguage sets
